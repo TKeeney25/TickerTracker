@@ -129,6 +129,6 @@ dmypy.json
 .pyre/
 
 # My Stuff
-.txt
-.json
-.csv
+*.txt
+*.json
+*.csv
