@@ -18,11 +18,11 @@ def getAllFunds() -> []:
     return_list = []
     for screen_type in ScreenTypes:
         offset = 0
-        total_funds = MAX_CALL_SIZE * 2 + 1
-        while offset < total_funds - MAX_CALL_SIZE:
-            my_json = (screen(offset, MAX_CALL_SIZE, screen_type.value)
+        total_funds = 100
+        while offset <= total_funds:
+            my_json = (screen(offset, MAX_CALL_SIZE, screen_type)
                        [ScreenerEnum.finance.value][ScreenerEnum.result.value][0])
-            total_funds = my_json[ScreenerEnum.total.value]
+            # total_funds = my_json[ScreenerEnum.total.value]
             for quote in my_json[ScreenerEnum.quotes.value]:
                 return_list.append(quote[ScreenerEnum.symbol.value])
             offset += MAX_CALL_SIZE
