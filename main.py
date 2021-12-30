@@ -199,10 +199,14 @@ def shouldBeFiltered(symbol: str) -> bool:
     return False
 
 
-def is_too_young(time: str) -> [Union[bool, str]]:
-    time_plus_ten = datetime.strptime(time, settings.TIME_STRING) + relativedelta(years=10)
+def is_too_young(time='') -> [Union[bool, str]]:
     today = date.today()
-    if time_plus_ten > datetime(today.year, today.month, today.day):
+    datetime_today = datetime(today.year, today.month, today.day)
+    if len(time) > 0:
+        time_plus_ten = datetime.strptime(time, settings.TIME_STRING) + relativedelta(years=10)
+    else:
+        time_plus_ten = datetime_today + relativedelta(years=9)
+    if time_plus_ten > datetime_today:
         return [True, time_plus_ten.strftime(settings.TIME_STRING)]
     return [False, '']
 
@@ -221,6 +225,9 @@ def processSymbols():
             if shouldBeFiltered(symbol):
                 print('Filtered')
                 continue
+            if tickers_csv.isInCSV(symbol) or failed_tickers_csv.isInCSV(symbol):
+                print('Data Already Obtained')
+                continue
             api_response = api_caller.getFundInfo(symbol)
             if '200' not in str(api_response):
                 settings.AddToLog('processSymbols()', symbol, settings.LogTypes.debug, str(api_response))
@@ -228,92 +235,66 @@ def processSymbols():
                     break
                 continue
             symbol_dict = json.loads(api_response.text)
-            my_ticker = MyTicker(symbol)
-            ''' FUND PROFILE '''
-            fund_profile = symbol_dict[Fund.fund_profile.value]
-            if 'err' in fund_profile:
-                print("Fund profile not found!")
-                settings.AddToLog('Default Key Statistics', symbol, settings.LogTypes.error, str(fund_profile))
-                today = date.today()
-                settings.AddTimeBomb(
-                    symbol, (datetime(today.year, today.month, today.day) + relativedelta(years=9)
-                             ).strftime(settings.TIME_STRING))
-                continue
-            else:
-                print('fund profile ' + str(fund_profile))
-                my_ticker.brokerages = fund_profile[FundProfile.brokerages.value]
-                my_ticker.category = fund_profile[FundProfile.category_name.value]
-                my_ticker.legal_type = fund_profile[FundProfile.legal_type.value]
-                twelve_b_one = (fund_profile[
-                    FundProfile.fees_expenses_investment.value][FeesExpensesInvestment.twelve_b_one.value])
-                if len(twelve_b_one) > 0:
-                    my_ticker.twelve_b_one = float(fund_profile[FundProfile.fees_expenses_investment.value]
-                                                   [FeesExpensesInvestment.twelve_b_one.value][
-                                                       Format.formatted.value].strip('%'))
-            ''' DEFAULT KEY STATISTICS'''
+            print(symbol_dict)
             default_key_statistics = symbol_dict[Fund.default_key_statistics.value]
-            if 'err' in default_key_statistics:
-                print('Default Key Statistics not found!')
-                settings.AddToLog('Default Key Statistics', symbol, settings.LogTypes.error, str(default_key_statistics))
-                continue
-            else:
-                print('default key statistics ' + str(default_key_statistics))
+            if DefaultKeyStatistics.fund_inception_date.value in default_key_statistics \
+                    and len(default_key_statistics[DefaultKeyStatistics.fund_inception_date.value]) > 0:
                 is_too_young_data = is_too_young(
                     default_key_statistics[DefaultKeyStatistics.fund_inception_date.value][Format.formatted.value])
-                if is_too_young_data[0]:
-                    settings.AddTimeBomb(symbol, is_too_young_data[1])
-                    failed_tickers_csv.write(my_ticker.toVerboseCSV() +
-                                             ["<10 years old. Will be 10 on " + is_too_young_data[1]])
-                    continue
-                if my_ticker.legal_type is None or 'Exchange Traded Fund' not in my_ticker.legal_type:
-                    my_ticker.rating = int(default_key_statistics[
-                                               DefaultKeyStatistics.morningstar_overall_rating.value][
-                                               Format.formatted.value])
-                else:
-                    my_ticker.rating = api_caller.getMorningstarRating(my_ticker.symbol)
-            ''' FUND PERFORMANCE '''
-            fund_performance = symbol_dict[Fund.fundPerformance.value]
-            if 'err' in fund_performance:
-                print('Fund performance not found!')
-                settings.AddToLog('Fund Performance', symbol, settings.LogTypes.error, str(fund_performance))
-                continue
             else:
-                print('fund performance ' + str(fund_performance))
-                trailing_returns = fund_performance[FundPerformance.trailingReturns.value]
-                print('trailing returns ' + str(trailing_returns))
-                my_ticker.year_to_date = float(
-                    trailing_returns[TrailingReturns.year_to_date.value][Format.formatted.value].strip('%'))
-                my_ticker.one_month = float(
-                    trailing_returns[TrailingReturns.one_month.value][Format.formatted.value].strip('%'))
-                my_ticker.one_year = float(
-                    trailing_returns[TrailingReturns.one_year.value][Format.formatted.value].strip('%'))
-                my_ticker.three_year = float(
-                    trailing_returns[TrailingReturns.three_year.value][Format.formatted.value].strip('%'))
-                my_ticker.five_year = float(
-                    trailing_returns[TrailingReturns.five_year.value][Format.formatted.value].strip('%'))
-                my_ticker.ten_year = float(
-                    trailing_returns[TrailingReturns.ten_year.value][Format.formatted.value].strip('%'))
-                my_ticker.negative_year = hasHadNegativeYear(
-                    fund_performance[FundPerformance.annual_total_returns.value]['returns'])
-            ''' QUOTE TYPE'''
+                is_too_young_data = is_too_young()
+            if is_too_young_data[0]:
+                settings.AddTimeBomb(symbol, is_too_young_data[1])
+                failed_tickers_csv.write(my_ticker.toVerboseCSV() +
+                                         ["<10 years old. Will be 10 on " + is_too_young_data[1]])
+                continue
+            my_ticker = MyTicker(symbol)
             quote_type = symbol_dict[Fund.quote_type.value]
-            if 'err' in quote_type:
-                print('Quote Type not found!')
-                settings.AddToLog('Quote Type', symbol, settings.LogTypes.error, str(quote_type))
-                continue
-            else:
-                print('Quote Type ' + str(quote_type))
-                my_ticker.full_name = quote_type[QuoteType.long_name.value]
-            ''' SUMMARY DETAIL '''
+            fund_profile = symbol_dict[Fund.fund_profile.value]
+            fund_performance = symbol_dict[Fund.fundPerformance.value]
             summary_detail = symbol_dict[Fund.summary_detail.value]
-            if 'err' in summary_detail or len(summary_detail) == 0:
-                print('Summary Detail not found!')
-                settings.AddToLog('Summary Detail', symbol, settings.LogTypes.error, str(summary_detail))
+            my_ticker.brokerages = fund_profile[FundProfile.brokerages.value]
+            my_ticker.category = fund_profile[FundProfile.category_name.value]
+            my_ticker.legal_type = fund_profile[FundProfile.legal_type.value]
+            twelve_b_one = (fund_profile[
+                FundProfile.fees_expenses_investment.value][FeesExpensesInvestment.twelve_b_one.value])
+            if len(twelve_b_one) > 0:
+                my_ticker.twelve_b_one = float(fund_profile[FundProfile.fees_expenses_investment.value]
+                                               [FeesExpensesInvestment.twelve_b_one.value][
+                                                   Format.formatted.value].strip('%'))
+            is_too_young_data = is_too_young(
+                default_key_statistics[DefaultKeyStatistics.fund_inception_date.value][Format.formatted.value])
+            if is_too_young_data[0]:
+                settings.AddTimeBomb(symbol, is_too_young_data[1])
+                failed_tickers_csv.write(my_ticker.toVerboseCSV() +
+                                         ["<10 years old. Will be 10 on " + is_too_young_data[1]])
                 continue
+            if my_ticker.legal_type is None or 'Exchange Traded Fund' not in my_ticker.legal_type:
+                my_ticker.rating = int(default_key_statistics[
+                                           DefaultKeyStatistics.morningstar_overall_rating.value][
+                                           Format.formatted.value])
             else:
-                print("Summary detail " + str(summary_detail))
-                my_ticker.my_yield = float(
-                    summary_detail[SummaryDetail.my_yield.value][Format.formatted.value].strip('%'))
+                my_ticker.rating = api_caller.getMorningstarRating(my_ticker.symbol)
+            print('fund performance ' + str(fund_performance))
+            trailing_returns = fund_performance[FundPerformance.trailingReturns.value]
+            print('trailing returns ' + str(trailing_returns))
+            my_ticker.year_to_date = float(
+                trailing_returns[TrailingReturns.year_to_date.value][Format.formatted.value].strip('%'))
+            my_ticker.one_month = float(
+                trailing_returns[TrailingReturns.one_month.value][Format.formatted.value].strip('%'))
+            my_ticker.one_year = float(
+                trailing_returns[TrailingReturns.one_year.value][Format.formatted.value].strip('%'))
+            my_ticker.three_year = float(
+                trailing_returns[TrailingReturns.three_year.value][Format.formatted.value].strip('%'))
+            my_ticker.five_year = float(
+                trailing_returns[TrailingReturns.five_year.value][Format.formatted.value].strip('%'))
+            my_ticker.ten_year = float(
+                trailing_returns[TrailingReturns.ten_year.value][Format.formatted.value].strip('%'))
+            my_ticker.negative_year = hasHadNegativeYear(
+                fund_performance[FundPerformance.annual_total_returns.value]['returns'])
+            my_ticker.full_name = quote_type[QuoteType.long_name.value]
+            my_ticker.my_yield = float(
+                summary_detail[SummaryDetail.my_yield.value][Format.formatted.value].strip('%'))
             print(my_ticker)
             print(my_ticker.passes_filter())
             print(symbol_dict)
