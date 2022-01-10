@@ -3,17 +3,18 @@ import os
 
 
 class CSVWriter:
-    def __init__(self, file_name, header: list):
+    def __init__(self, file_name, header: list, initialize=False):
         self.file_name = file_name
         self.header = header
         self.symbols = set()
-        if not os.path.exists(file_name):
+        if not os.path.exists(file_name) or not self.isInCSV(self.header[0]) or initialize:
             self._initializeCSV()
 
     def _initializeCSV(self):
         with open(self.file_name, 'w', newline='') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(self.header)
+            self.symbols.add(self.header[0])
 
     def write(self, values: list):
         with open(self.file_name, 'a', newline='') as csv_file:

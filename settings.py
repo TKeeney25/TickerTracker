@@ -1,26 +1,32 @@
 import json
 import enum
 import os.path
+import threading
 import traceback
 from datetime import datetime, date
 
 # region 'Constants'
+from pathlib import Path
+from queue import Queue
 
-SETTINGS_FILE = 'settings.json'
-TIME_BOMB_FILE = 'time_bombs.json'
+SETTINGS_FILE = 'Data/settings.json'
+SYMBOL_FILE = 'Data/symbols.json'
+TIME_BOMB_FILE = 'Data/time_bombs.json'
 TIME_STRING = '%Y-%m-%d'
 
 
 # endregion
 
+
 # region 'Enums'
-
-
 class SettingTypes(enum.Enum):
     blacklist = "Blacklist"
     whitelist = "Whitelist"
     filter = "Filters"
     api_key = "APIKey"
+    file_path = "FilePath"
+    file_name = "FileName"
+    failed_file_name = "FailedFileName"
 
 
 class MainFilters(enum.Enum):
@@ -34,9 +40,8 @@ class FilterTypes(enum.Enum):
 
 # endregion
 
+
 # region 'Global Variables'
-
-
 blacklist = set()
 whitelist = set()
 obtained_black_list = False
@@ -51,13 +56,34 @@ class LogTypes(enum.Enum):
     debug = 'Debug:'
 
 
-def ReCreateSettingsFile():
+log_text = Queue()
+runtime = '0:00:00'
+time_remaining = '0:00:00'
+current_stage = 'Start'
+total_funds = 1
+funds_read = 0
+exit_event = threading.Event()
+pause_event = threading.Event()
+
+
+def log(data):
+    global log_text
+    print(data)
+    log_text.put('%s' % str(data))
+    AddToLog('Log', data, LogTypes.debug)
+
+
+def CreateSettingsFile():
     global json_loaded
     json_loaded = {
         SettingTypes.api_key.value: '',
-        SettingTypes.blacklist.value: [],
-        SettingTypes.whitelist.value: [],
-        SettingTypes.filter.value: []
+        SettingTypes.file_path.value: os.getcwd() + '\\Results',
+        SettingTypes.file_name.value: 'tickers.csv',
+        SettingTypes.failed_file_name.value: 'failedTickers.csv',
+        SettingTypes.filter.value: {
+            SettingTypes.whitelist.value: [],
+            SettingTypes.blacklist.value: []
+        }
     }
     SaveSettings()
 
@@ -75,10 +101,45 @@ def GetAPIKey() -> str:
 
 
 def SetAPIKey(new_key: str, save_after=True):
-    print("")
     json_loaded[SettingTypes.api_key.value] = new_key
     if save_after:
         SaveSettings()
+
+
+def GetFilePath() -> str:
+    if not Path.is_dir(Path(json_loaded[SettingTypes.file_path.value])) \
+            or len(json_loaded[SettingTypes.file_path.value]) == 0:
+        json_loaded[SettingTypes.file_path.value] = os.getcwd() + '\\Results'
+    return json_loaded[SettingTypes.file_path.value]
+
+
+def SetFilePath(path_str: str, save_after=True):
+    json_loaded[SettingTypes.file_path.value] = path_str
+    if save_after:
+        SaveSettings()
+
+
+def GetFileName() -> str:
+    if '.csv' not in json_loaded[SettingTypes.file_name.value]:
+        json_loaded[SettingTypes.file_name.value] = json_loaded[SettingTypes.file_name.value].split('.')[0] + '.csv'
+    return json_loaded[SettingTypes.file_name.value]
+
+
+def SetFileName(input_str: str, save_after=True):
+    json_loaded[SettingTypes.file_name.value] = input_str
+    if save_after:
+        SaveSettings()
+
+
+def GetFailedFileName() -> str:
+    if '.csv' not in json_loaded[SettingTypes.failed_file_name.value]:
+        json_loaded[SettingTypes.failed_file_name.value] \
+            = json_loaded[SettingTypes.failed_file_name.value].split('.')[0] + '.csv'
+    return json_loaded[SettingTypes.failed_file_name.value]
+
+
+def SetFailedFileName(input_str: str):
+    json_loaded[SettingTypes.failed_file_name.value] = input_str
 
 
 def AddToLog(function: str, symbol: str, log_type: LogTypes, message=''):
@@ -87,7 +148,7 @@ def AddToLog(function: str, symbol: str, log_type: LogTypes, message=''):
     while len(symbol) < 5:
         symbol += ' '
     print("Adding to log: " + str(log_type.value) + function + symbol + ' ' + message)
-    log_file = open("log.txt", 'a')
+    log_file = open("Data/log.txt", 'a')
     if LogTypes.error == log_type:
         log_file.write("\n%s%s\t%s\t%s\t%s" %
                        (log_type.value, datetime.now().strftime("%D:%H:%M:%S"), function, symbol,
@@ -101,16 +162,13 @@ def AddToLog(function: str, symbol: str, log_type: LogTypes, message=''):
 def fillWhitelistFromSettings():
     global obtained_white_list
     obtained_white_list = True
-    whitelist.update(json_loaded[SettingTypes.whitelist.value])
+    whitelist.update(set(json_loaded[SettingTypes.filter.value][SettingTypes.whitelist.value]))
 
 
 def fillBlacklistFromSettings():
     global obtained_black_list
     obtained_black_list = True
-    for dictionary in json_loaded['FilterSets'][0][SettingTypes.blacklist.value]:
-        if 'eq' in dictionary['operator']:
-            blacklist.update(dictionary['operands'])
-    blacklist.update(set(GetFilteredTimeBombs()))
+    blacklist.update(set(json_loaded[SettingTypes.filter.value][SettingTypes.blacklist.value]))
 
 
 def AddToWhitelist(item, save_after=True):
@@ -176,7 +234,6 @@ def SaveSettings():
 
 
 # region 'Time bombs'
-
 def GetFilteredTimeBombs() -> list[str]:
     return_list = []
     remove_list = []
@@ -217,11 +274,17 @@ def SaveBombs():
 
 
 # region 'Initialization'
-
-
 print("Acquiring Settings...")
+try:
+    os.mkdir(os.getcwd() + '\\Data')
+except OSError as Error:
+    pass
+try:
+    os.mkdir(os.getcwd() + '\\Results')
+except OSError as Error:
+    pass
 if not os.path.exists(SETTINGS_FILE):
-    ReCreateSettingsFile()
+    CreateSettingsFile()
 if not os.path.exists(TIME_BOMB_FILE):
     CreateTimebombFile()
 settings_file = open(SETTINGS_FILE)

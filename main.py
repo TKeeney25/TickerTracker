@@ -1,14 +1,30 @@
 import enum
 import json
+import os
+import sys
+import threading
+import time
 from datetime import datetime, date, timedelta
+from functools import partial
+from queue import Queue
 from typing import Union
 
+import pyjokes
 from dateutil.relativedelta import relativedelta
+from kivy.app import App
+from kivy.clock import Clock, mainthread
+from kivy.core.window import Window
+from kivy.resources import resource_add_path
+from kivy.uix.button import Button
+from kivy.uix.label import Label
+from kivy.uix.screenmanager import Screen, ScreenManager
 
-import settings
-from json_interpreter import getAllFunds
-from csv_writer import CSVWriter
 import api_caller
+import settings
+import json_interpreter
+from csv_writer import CSVWriter
+
+Window.size = (1280, 960)
 
 
 # region 'Enums'
@@ -101,8 +117,8 @@ class MyTicker:
         self.brokerages: list = []
 
     def toCSV(self) -> []:
-        return [self.symbol, self.full_name, self.category, self.year_to_date, self.one_month, self.one_year,
-                self.three_year, self.five_year, self.ten_year, self.my_yield, self.rating,
+        return [self.symbol, self.full_name.replace(',', ''), self.category, self.year_to_date, self.one_month,
+                self.one_year, self.three_year, self.five_year, self.ten_year, self.my_yield, self.rating,
                 boolToStr(self.negative_year)]
 
     def toVerboseCSV(self) -> []:
@@ -160,21 +176,21 @@ class MyTicker:
             return [False, 'Has a ten year return of: ' + str(self.one_year)]
         if self.twelve_b_one > 0:
             return [False, 'Has a 12b-1 of: ' + str(self.twelve_b_one)]
-        return [True, '']
+        return [True, 'Passed']
 
 
-def loadSymbols() -> {}:
-    with open("symbols.json", "r") as json_file:
+def loadSymbols(force_refresh=False) -> {}:
+    if not os.path.exists(settings.SYMBOL_FILE) or force_refresh:
+        open(settings.SYMBOL_FILE, 'w').close()
+    with open(settings.SYMBOL_FILE, "r") as json_file:
         json_load = None
         if len(json_file.readlines()) > 0:
             json_file.seek(0)
             json_load = json.load(json_file)
     if json_load is None or (
-            datetime.strptime(json_load['date'], settings.TIME_STRING) + timedelta(days=30)).date() < date.today():
-        with open("symbols.json", "w") as json_file:
-            json_load = {"date": date.today().strftime(settings.TIME_STRING), "symbols": getAllFunds()}
-            print(json_load)
-            json_file.write(json.dumps(json_load, indent=4, sort_keys=True))
+            datetime.strptime(json_load['date'], settings.TIME_STRING) + timedelta(days=30)).date() < date.today() or (
+            not json_load[json_interpreter.Symbols.complete.value][json_interpreter.Complete.is_complete.value]):
+        json_load = json_interpreter.Funds().getAllFunds()
     return json_load
 
 
@@ -190,6 +206,8 @@ def hasHadNegativeYear(returns: list, year_span=10) -> bool:
 
 
 def shouldBeFiltered(symbol: str) -> bool:
+    if settings.isInWhitelist(symbol):
+        return False
     if settings.isInBlacklist(symbol):
         return True
     if '^' in symbol:
@@ -199,11 +217,11 @@ def shouldBeFiltered(symbol: str) -> bool:
     return False
 
 
-def is_too_young(time='') -> [Union[bool, str]]:
+def is_too_young(my_time='') -> [Union[bool, str]]:
     today = date.today()
     datetime_today = datetime(today.year, today.month, today.day)
-    if len(time) > 0:
-        time_plus_ten = datetime.strptime(time, settings.TIME_STRING) + relativedelta(years=10)
+    if len(my_time) > 0:
+        time_plus_ten = datetime.strptime(my_time, settings.TIME_STRING) + relativedelta(years=10)
     else:
         time_plus_ten = datetime_today + relativedelta(years=9)
     if time_plus_ten > datetime_today:
@@ -211,31 +229,65 @@ def is_too_young(time='') -> [Union[bool, str]]:
     return [False, '']
 
 
+is_overwrite = False
+is_refresh_tickers = False
+
+
 def processSymbols():
+    funds_read = 0
+    settings.current_stage = 'Starting...'
     headers = ['Ticker', 'Name', 'Category', 'YTD', '4W', '1Y', '3Y', '5Y', '10Y', 'Yield', 'Rating', 'Neg. Yr']
     failed_headers = headers + ['12b-1', 'Brokerages', 'Failed Reason']
-    tickers_csv = CSVWriter('tickers.csv', headers)
-    failed_tickers_csv = CSVWriter('failedTickers.csv', failed_headers)
-    symbol_list = loadSymbols()['symbols']
+    tickers_csv = \
+        CSVWriter(settings.GetFilePath() + '\\' + settings.GetFileName(), headers, is_overwrite)
+    failed_tickers_csv = \
+        CSVWriter(settings.GetFilePath() + '\\' + settings.GetFailedFileName(), failed_headers, is_overwrite)
+    symbol_list = loadSymbols(is_refresh_tickers)['symbols']
     my_ticker = MyTicker('')
+    total_funds = len(symbol_list)
+    time_start = time.time()
     for symbol in symbol_list:
+        if settings.pause_event.is_set() or settings.exit_event.is_set():
+            settings.log('Paused')
+            pause_start = time.time()
+            while settings.pause_event.is_set() or settings.exit_event.is_set():
+                time.sleep(.1)
+                if settings.exit_event.is_set():
+                    settings.log('Exiting')
+                    exit(-1)
+            time_start += time.time() - pause_start
         try:
             symbol = symbol.rstrip()
-            print('Symbol ' + symbol)
+            settings.current_stage = "Processing: " + symbol
+            settings.log("Processing: " + symbol)
+            time_diff = time.time() - time_start
+            settings.runtime = str(time.strftime("%H:%M:%S", time.gmtime(time_diff)))
+            if funds_read != 0:
+                settings.time_remaining = str(time.strftime("%H:%M:%S", time.gmtime(
+                    (time_diff / funds_read) * (total_funds - funds_read))))
+            funds_read += 1
             if shouldBeFiltered(symbol):
-                print('Filtered')
+                settings.log('Filtered ' + symbol)
                 continue
             if tickers_csv.isInCSV(symbol) or failed_tickers_csv.isInCSV(symbol):
-                print('Data Already Obtained')
+                settings.log(symbol + ' already obtained. Skipping...')
                 continue
             api_response = api_caller.getFundInfo(symbol)
             if '200' not in str(api_response):
+                settings.log('Api Response of %s for %s. Skipping...' % (api_response, symbol))
                 settings.AddToLog('processSymbols()', symbol, settings.LogTypes.debug, str(api_response))
+                failed_tickers_csv.write(my_ticker.toVerboseCSV() + ["API Response of " + str(api_response)])
                 if '432' in str(api_response):
-                    break
+                    settings.log('Out of API Calls! Stopping!')
+                    settings.current_stage = 'Stopped'
+                    exit(-1)
+                if '401' in str(api_response):
+                    settings.log('Incorrect API Key! Stopping!')
+                    settings.current_stage = 'Stopped'
+                    exit(-1)
                 continue
             symbol_dict = json.loads(api_response.text)
-            print(symbol_dict)
+            my_ticker = MyTicker(symbol)
             default_key_statistics = symbol_dict[Fund.default_key_statistics.value]
             if DefaultKeyStatistics.fund_inception_date.value in default_key_statistics \
                     and len(default_key_statistics[DefaultKeyStatistics.fund_inception_date.value]) > 0:
@@ -247,8 +299,8 @@ def processSymbols():
                 settings.AddTimeBomb(symbol, is_too_young_data[1])
                 failed_tickers_csv.write(my_ticker.toVerboseCSV() +
                                          ["<10 years old. Will be 10 on " + is_too_young_data[1]])
+                settings.log('%s is too young. Will be old enough on %s' % (symbol, is_too_young_data[1]))
                 continue
-            my_ticker = MyTicker(symbol)
             quote_type = symbol_dict[Fund.quote_type.value]
             fund_profile = symbol_dict[Fund.fund_profile.value]
             fund_performance = symbol_dict[Fund.fundPerformance.value]
@@ -268,16 +320,15 @@ def processSymbols():
                 settings.AddTimeBomb(symbol, is_too_young_data[1])
                 failed_tickers_csv.write(my_ticker.toVerboseCSV() +
                                          ["<10 years old. Will be 10 on " + is_too_young_data[1]])
+                settings.log('%s is too young. Will be old enough on %s' % (symbol, is_too_young_data[1]))
                 continue
             if my_ticker.legal_type is None or 'Exchange Traded Fund' not in my_ticker.legal_type:
                 my_ticker.rating = int(default_key_statistics[
                                            DefaultKeyStatistics.morningstar_overall_rating.value][
-                                           Format.formatted.value])
+                                           Format.raw.value])
             else:
                 my_ticker.rating = api_caller.getMorningstarRating(my_ticker.symbol)
-            print('fund performance ' + str(fund_performance))
             trailing_returns = fund_performance[FundPerformance.trailingReturns.value]
-            print('trailing returns ' + str(trailing_returns))
             my_ticker.year_to_date = float(
                 trailing_returns[TrailingReturns.year_to_date.value][Format.formatted.value].strip('%'))
             my_ticker.one_month = float(
@@ -295,16 +346,150 @@ def processSymbols():
             my_ticker.full_name = quote_type[QuoteType.long_name.value]
             my_ticker.my_yield = float(
                 summary_detail[SummaryDetail.my_yield.value][Format.formatted.value].strip('%'))
-            print(my_ticker)
-            print(my_ticker.passes_filter())
-            print(symbol_dict)
             if my_ticker.passes_filter()[0]:
+                settings.log('%s complete' % symbol)
                 tickers_csv.write(my_ticker.toCSV())
             else:
+                settings.log('Filtered %s' % symbol)
                 failed_tickers_csv.write(my_ticker.toVerboseCSV() + [my_ticker.passes_filter()[1]])
         except KeyError as exception:
+            settings.log('%s threw error %s!' % (symbol, str(exception)))
             settings.AddToLog('processSymbols()', symbol, settings.LogTypes.error)
             failed_tickers_csv.write(my_ticker.toVerboseCSV() + ['Threw exception during execution: ' + str(exception)])
+    settings.current_stage = 'Done!'
 
 
-processSymbols()
+class MyLabel(Label):
+    pass
+
+
+class MyH1Label(MyLabel):
+    pass
+
+
+class MyH2Label(MyLabel):
+    pass
+
+
+class MyButton(Button):
+    pass
+
+
+class MyLogLabel(Label):
+    def __init__(self, **kwargs):
+        super(MyLogLabel, self).__init__(**kwargs)
+
+    pass
+
+
+class StartupScreen(Screen):
+    trd = threading.Thread
+    first_start = True
+    finish_switch = True
+    count = 0
+    logs = Queue()
+
+    def __init__(self, **kwargs):
+        super(StartupScreen, self).__init__(**kwargs)
+        Clock.schedule_interval(self.update_settings, 0.0)
+        self.ids.file_name.text = settings.GetFileName()
+        self.ids.failed_file_name.text = settings.GetFailedFileName()
+        self.ids.file_location.text = settings.GetFilePath()
+
+    @mainthread
+    def update_settings(self, *args):
+        while not settings.log_text.empty():
+            scroll = self.ids.scroll.scroll_y
+            vp_height = self.ids.scroll.viewport_size[1]
+            sv_height = self.ids.scroll.height
+            scroll_lock = scroll == 0.0 or scroll == 1.0
+            add_log = MyLogLabel(text=settings.log_text.get())
+            self.ids.log_grid.add_widget(add_log)
+            self.logs.put(add_log)
+            if self.count >= 2000:
+                self.ids.log_grid.remove_widget(self.logs.get())
+            else:
+                self.count += 1
+            if vp_height > sv_height and not scroll_lock:
+                bottom = scroll * (vp_height - sv_height)
+                Clock.schedule_once(partial(self.adjust_scroll, bottom + 28), -1)
+        self.ids.progress_bar.max = settings.total_funds
+        self.ids.progress_bar.value = settings.funds_read
+        self.ids.stage_label.text = settings.current_stage
+        if ('Done!' in settings.current_stage or 'Stopped' in settings.current_stage) and self.finish_switch:
+            self.trd.join()
+            self.first_start = True
+            self.finish_switch = False
+            self.ids.cancel_button.disabled = True
+            self.ids.start_button.text = 'Start'
+        self.ids.runtime_label.text = 'Runtime: ' + settings.runtime
+        self.ids.time_label.text = 'Time Remaining: ' + settings.time_remaining
+        self.ids.api_key.text = settings.GetAPIKey()
+
+    def adjust_scroll(self, bottom, dt):
+        vp_height = self.ids.scroll.viewport_size[1]
+        sv_height = self.ids.scroll.height
+        self.ids.scroll.scroll_y = bottom / (vp_height - sv_height)
+
+    def button_press(self, name):
+        global is_overwrite
+        global is_refresh_tickers
+        if 'Start' in name:
+            settings.pause_event.clear()
+            settings.exit_event.clear()
+            if self.first_start:
+                self.trd = threading.Thread(target=processSymbols, daemon=True)
+                self.trd.start()
+                self.finish_switch = True
+                self.first_start = False
+                self.ids.cancel_button.disabled = False
+            self.ids.start_button.text = 'Pause'
+            settings.SetFileName(self.ids.file_name.text)
+            settings.SetFailedFileName(self.ids.failed_file_name.text)
+            settings.SetFilePath(self.ids.file_location.text)
+            is_overwrite = self.ids.is_overwrite.active
+            is_refresh_tickers = self.ids.is_refresh.active
+            settings.SetAPIKey(self.ids.api_key.text)
+        elif 'Pause' in name:
+            settings.pause_event.set()
+            self.ids.start_button.text = 'Start'
+        elif 'Cancel' in name:
+            settings.exit_event.set()
+            self.trd.join()
+            self.first_start = True
+            self.ids.cancel_button.disabled = True
+            self.ids.start_button.text = 'Start'
+
+
+class WelcomeScreen(Screen):
+    button_text = "text"
+
+    def __init__(self, **kwargs):
+        super(WelcomeScreen, self).__init__(**kwargs)
+        self.ids.welcome_label.text = pyjokes.get_joke(language="en", category="all")
+
+
+class TickerTrackerApp(App):
+    def __init__(self, **kwargs):
+        super(TickerTrackerApp, self).__init__(**kwargs)
+        self.root = ScreenManager()
+
+    def build(self):
+        self.icon = r'Data\Images\icon.png'
+        self.root.add_widget(WelcomeScreen(name='Welcome'))
+        self.root.add_widget(StartupScreen(name='Startup'))
+        return self.root
+
+    def goToScreen(self, screen_name: str):
+        self.root.switch_to(self.root.get_screen(screen_name))
+
+
+if __name__ == '__main__':
+    try:
+        if hasattr(sys, '_MEIPASS'):
+            resource_add_path(os.path.join(sys._MEIPASS))
+        TickerTrackerApp().run()
+
+    except Exception as e:
+        print(e)
+        input("Press enter.")
