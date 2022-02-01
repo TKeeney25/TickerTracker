@@ -1,0 +1,163 @@
+#:import ScrollEffect  kivy.effects.scroll.ScrollEffect
+<WelcomeScreen>:
+    GridLayout:
+        rows: 2
+        cols: 1
+        padding: 50
+        Label:
+            id: welcome_label
+            text: 'Welcome to TickerTracker!'
+            font_size: 48
+            text_size: self.width, None
+            size_hint: 1, 1
+            height: self.texture_size[1]
+        Button:
+            id: main_button
+            size_hint: .2, .2
+            text: 'Start'
+            on_release: root.manager.current = 'Startup'
+<MyLabel>:
+    font_size: 36
+    size_hint_y: None
+    height: self.texture_size[1]
+<MyH1Label>:
+    font_size: 24
+    size_hint_y: None
+<MyH2Label>:
+    halign: 'left'
+    font_size: 16
+    text_size: self.size
+<MyButton>:
+    height: self.texture_size[1]*2
+    size_hint_y: None
+    font_size: 16
+<MyLogLabel>:
+    color: 1, 1, 1, 1
+    font_size: 12
+    text_size: self.width, None
+    halign: 'left'
+    valign: 'top'
+    size_hint_y: None
+    height: 14
+
+<StartupScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        MyH1Label:
+            text: 'TickerTracker'
+        GridLayout:
+            rows: 1
+            cols: 2
+            padding: 10
+            BoxLayout:
+                orientation: 'vertical'
+                size_hint_x: .85
+                padding: 10
+                MyLabel:
+                    id: stage_label
+                    text: 'Ready to Start'
+                ProgressBar:
+                    id: progress_bar
+                    size_hint_max_y: 1
+                    value: 0
+                    max: 1
+                BoxLayout:
+                    size_hint_y: .4
+                    orientation: 'horizontal'
+                    MyH2Label:
+                        id: runtime_label
+                        text: 'Runtime: 0'
+                    MyH2Label:
+                        id: time_label
+                        text: 'Time Remaining: 0'
+                BoxLayout:
+                    orientation: 'horizontal'
+                    size_hint_y: .5
+                    MyButton:
+                        height: 40
+                        id: start_button
+                        text: 'Start'
+                        on_release: root.button_press(self.text)
+                    MyButton:
+                        id: cancel_button
+                        disabled: True
+                        text: 'Cancel'
+                        on_release: root.button_press(self.text)
+                BoxLayout:
+                    size_hint_y: .3
+                    orientation: 'horizontal'
+                    MyH2Label
+                        size_hint_x: .4
+                        text: 'File Path:'
+                    TextInput:
+                        size_hint_x: 1.6
+                        id: file_location
+                BoxLayout:
+                    size_hint_y: .3
+                    orientation: 'horizontal'
+                    MyH2Label
+                        size_hint_x: 1
+                        text: 'Passed Funds File Name:'
+                    TextInput:
+                        size_hint_x: 1
+                        id: file_name
+                BoxLayout:
+                    size_hint_y: .3
+                    orientation: 'horizontal'
+                    MyH2Label
+                        size_hint_x: 1
+                        text: 'Failed Funds File Name:'
+                    TextInput:
+                        size_hint_x: 1
+                        id: failed_file_name
+                BoxLayout:
+                    orientation: 'horizontal'
+                    size_hint_y: .4
+                    BoxLayout:
+                        orientation: 'horizontal'
+                        MyH2Label
+                            text: 'Overwrite File:'
+                        CheckBox:
+                            size_hint_y: .4
+                            id: is_overwrite
+                            active: False
+                    BoxLayout:
+                        orientation: 'horizontal'
+                        MyH2Label
+                            text: 'Refresh Tickers:'
+                        CheckBox:
+                            size_hint_y: .4
+                            id: is_refresh
+                            active: False
+                Widget:
+                    size_hint_y: .2
+                BoxLayout:
+                    size_hint_y: .3
+                    orientation: 'horizontal'
+                    MyH2Label
+                        size_hint_x: .3
+                        text: 'API Key:'
+                    TextInput:
+                        size_hint_x: 1.7
+                        id: api_key
+                Widget:
+                    size_hint_y: 5
+            ScrollView:
+                id: scroll
+                effect_cls: ScrollEffect
+                size_hint_x: 1.15
+                canvas.before:
+                    Color:
+                        rgba: .1, .1, .1, 1
+                    Rectangle:
+                        # self here refers to the widget i.e FloatLayout
+                        pos: self.pos
+                        size: self.size
+                bar_width: 20
+                scroll_type: ['bars']
+                color: 1,1,1,1
+                BoxLayout:
+                    id: log_grid
+                    orientation: 'vertical'
+                    size_hint_y: None
+                    height: self.minimum_height
