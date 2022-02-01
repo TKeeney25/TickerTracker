@@ -434,7 +434,14 @@ class StartupScreen(Screen):
     def button_press(self, name):
         global is_overwrite
         global is_refresh_tickers
-        if 'Start' in name:
+        if 'Start' in name or 'Resume' in name:
+            self.ids.start_button.text = 'Pause'
+            settings.SetFileName(self.ids.file_name.text)
+            settings.SetFailedFileName(self.ids.failed_file_name.text)
+            settings.SetFilePath(self.ids.file_location.text)
+            is_overwrite = self.ids.is_overwrite.active
+            is_refresh_tickers = self.ids.is_refresh.active
+            settings.SetAPIKey(self.ids.api_key.text)
             settings.pause_event.clear()
             settings.exit_event.clear()
             if self.first_start:
@@ -443,20 +450,15 @@ class StartupScreen(Screen):
                 self.finish_switch = True
                 self.first_start = False
                 self.ids.cancel_button.disabled = False
-            self.ids.start_button.text = 'Pause'
-            settings.SetFileName(self.ids.file_name.text)
-            settings.SetFailedFileName(self.ids.failed_file_name.text)
-            settings.SetFilePath(self.ids.file_location.text)
-            is_overwrite = self.ids.is_overwrite.active
-            is_refresh_tickers = self.ids.is_refresh.active
-            settings.SetAPIKey(self.ids.api_key.text)
         elif 'Pause' in name:
             settings.pause_event.set()
-            self.ids.start_button.text = 'Start'
+            settings.current_stage = 'Paused'
+            self.ids.start_button.text = 'Resume'
         elif 'Cancel' in name:
             settings.exit_event.set()
             self.trd.join()
             self.first_start = True
+            settings.current_stage = 'Stopped'
             self.ids.cancel_button.disabled = True
             self.ids.start_button.text = 'Start'
 

@@ -104,7 +104,7 @@ def screenBetweenFundPrices(
     return doAPICall(YHFunctions.screen, offset, size, screen_type, screener_payload)
 
 
-def screenGreaterThanFundPrices(offset: int, size: int, screen_type: ScreenTypes, greater_than: float) -> json:
+def screenGreaterThanFundPrices(offset: int, size: int, screen_type: ScreenTypes, greater_than: float, dont_care=0) -> json:
     screener_payload = '''
             ,
             {
