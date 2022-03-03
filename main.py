@@ -310,9 +310,10 @@ def processSymbols():
                 if len(twelve_b_one) > 0:
                     my_ticker.twelve_b_one = float(fund_profile[FundProfile.fees_expenses_investment.value]
                                                    [FeesExpensesInvestment.twelve_b_one.value][
-                                                       Format.formatted.value].strip('%'))
+                                                       Format.formatted.value].replace(',', '').replace('%',''))
                 is_too_young_data = is_too_young(
                     default_key_statistics[DefaultKeyStatistics.fund_inception_date.value][Format.formatted.value])
+
                 if is_too_young_data[0]:
                     settings.AddTimeBomb(symbol, is_too_young_data[1])
                     failed_tickers_csv.write(my_ticker.toVerboseCSV() +
@@ -327,22 +328,22 @@ def processSymbols():
                     my_ticker.rating = api_caller.getMorningstarRating(my_ticker.symbol)
                 trailing_returns = fund_performance[FundPerformance.trailingReturns.value]
                 my_ticker.year_to_date = float(
-                    trailing_returns[TrailingReturns.year_to_date.value][Format.formatted.value].strip('%'))
+                    trailing_returns[TrailingReturns.year_to_date.value][Format.formatted.value].replace(',', '').replace('%',''))
                 my_ticker.one_month = float(
-                    trailing_returns[TrailingReturns.one_month.value][Format.formatted.value].strip('%'))
+                    trailing_returns[TrailingReturns.one_month.value][Format.formatted.value].replace(',', '').replace('%',''))
                 my_ticker.one_year = float(
-                    trailing_returns[TrailingReturns.one_year.value][Format.formatted.value].strip('%'))
+                    trailing_returns[TrailingReturns.one_year.value][Format.formatted.value].replace(',', '').replace('%',''))
                 my_ticker.three_year = float(
-                    trailing_returns[TrailingReturns.three_year.value][Format.formatted.value].strip('%'))
+                    trailing_returns[TrailingReturns.three_year.value][Format.formatted.value].replace(',', '').replace('%',''))
                 my_ticker.five_year = float(
-                    trailing_returns[TrailingReturns.five_year.value][Format.formatted.value].strip('%'))
+                    trailing_returns[TrailingReturns.five_year.value][Format.formatted.value].replace(',', '').replace('%',''))
                 my_ticker.ten_year = float(
-                    trailing_returns[TrailingReturns.ten_year.value][Format.formatted.value].strip('%'))
+                    trailing_returns[TrailingReturns.ten_year.value][Format.formatted.value].replace(',', '').replace('%',''))
                 my_ticker.negative_year = hasHadNegativeYear(
                     fund_performance[FundPerformance.annual_total_returns.value]['returns'])
                 my_ticker.full_name = quote_type[QuoteType.long_name.value]
                 my_ticker.my_yield = float(
-                    summary_detail[SummaryDetail.my_yield.value][Format.formatted.value].strip('%'))
+                    summary_detail[SummaryDetail.my_yield.value][Format.formatted.value].replace(',', '').replace('%',''))
                 if my_ticker.passes_filter()[0]:
                     settings.log('%s complete' % symbol)
                     tickers_csv.write(my_ticker.toCSV())
@@ -359,7 +360,6 @@ def processSymbols():
     except Exception as exception:
         settings.log('Thread threw error: %s' % str(exception), settings.LogTypes.error)
         settings.current_stage = 'Stopped! Exception Raised!'
-
 
 
 class MyLabel(Label):
