@@ -223,7 +223,7 @@ def is_too_young(my_time='') -> [Union[bool, str]]:
     if len(my_time) > 0:
         time_plus_ten = datetime.strptime(my_time, settings.TIME_STRING) + relativedelta(years=10)
     else:
-        time_plus_ten = datetime_today + relativedelta(years=9)
+        time_plus_ten = datetime_today + relativedelta(days=1)
     if time_plus_ten > datetime_today:
         return [True, time_plus_ten.strftime(settings.TIME_STRING)]
     return [False, '']
@@ -234,129 +234,132 @@ is_refresh_tickers = False
 
 
 def processSymbols():
-    funds_read = 0
-    settings.current_stage = 'Starting...'
-    headers = ['Ticker', 'Name', 'Category', 'YTD', '4W', '1Y', '3Y', '5Y', '10Y', 'Yield', 'Rating', 'Neg. Yr']
-    failed_headers = headers + ['12b-1', 'Brokerages', 'Failed Reason']
-    tickers_csv = \
-        CSVWriter(settings.GetFilePath() + '\\' + settings.GetFileName(), headers, is_overwrite)
-    failed_tickers_csv = \
-        CSVWriter(settings.GetFilePath() + '\\' + settings.GetFailedFileName(), failed_headers, is_overwrite)
-    symbol_list = loadSymbols(is_refresh_tickers)['symbols']
-    my_ticker = MyTicker('')
-    total_funds = len(symbol_list)
-    time_start = time.time()
-    for symbol in symbol_list:
-        if settings.pause_event.is_set() or settings.exit_event.is_set():
-            settings.log('Paused')
-            pause_start = time.time()
-            while settings.pause_event.is_set() or settings.exit_event.is_set():
-                time.sleep(.1)
-                if settings.exit_event.is_set():
-                    settings.log('Exiting')
-                    exit(-1)
-            time_start += time.time() - pause_start
-        try:
-            symbol = symbol.rstrip()
-            settings.current_stage = "Processing: " + symbol
-            settings.log("Processing: " + symbol)
-            time_diff = time.time() - time_start
-            settings.runtime = str(time.strftime("%H:%M:%S", time.gmtime(time_diff)))
-            if funds_read != 0:
-                settings.time_remaining = str(time.strftime("%H:%M:%S", time.gmtime(
-                    (time_diff / funds_read) * (total_funds - funds_read))))
-            funds_read += 1
-            if shouldBeFiltered(symbol):
-                settings.log('Filtered ' + symbol)
-                continue
-            if tickers_csv.isInCSV(symbol) or failed_tickers_csv.isInCSV(symbol):
-                settings.log(symbol + ' already obtained. Skipping...')
-                continue
-            api_response = api_caller.getFundInfo(symbol)
-            if '200' not in str(api_response):
-                settings.log('Api Response of %s for %s. Skipping...' % (api_response, symbol))
-                settings.AddToLog('processSymbols()', symbol, settings.LogTypes.debug, str(api_response))
-                failed_tickers_csv.write(my_ticker.toVerboseCSV() + ["API Response of " + str(api_response)])
-                if '432' in str(api_response):
-                    settings.log('Out of API Calls! Stopping!')
-                    settings.current_stage = 'Stopped'
-                    exit(-1)
-                if '401' in str(api_response):
-                    settings.log('Incorrect API Key! Stopping!')
-                    settings.current_stage = 'Stopped'
-                    exit(-1)
-                continue
-            symbol_dict = json.loads(api_response.text)
-            my_ticker = MyTicker(symbol)
-            default_key_statistics = symbol_dict[Fund.default_key_statistics.value]
-            if DefaultKeyStatistics.fund_inception_date.value in default_key_statistics \
-                    and len(default_key_statistics[DefaultKeyStatistics.fund_inception_date.value]) > 0:
+    try:
+        funds_read = 0
+        settings.current_stage = 'Starting...'
+        headers = ['Ticker', 'Name', 'Category', 'YTD', '4W', '1Y', '3Y', '5Y', '10Y', 'Yield', 'Rating', 'Neg. Yr']
+        failed_headers = headers + ['12b-1', 'Brokerages', 'Failed Reason']
+        for i in range(2):
+            tickers_csv = \
+                CSVWriter(settings.GetFilePath() + '\\' + settings.GetFileName(), headers, is_overwrite)
+            failed_tickers_csv = \
+                CSVWriter(settings.GetFilePath() + '\\' + settings.GetFailedFileName(), failed_headers, is_overwrite)
+        symbol_list = loadSymbols(is_refresh_tickers)['symbols']
+        my_ticker = MyTicker('')
+        total_funds = len(symbol_list)
+        time_start = time.time()
+        for symbol in symbol_list:
+            if settings.pause_event.is_set() or settings.exit_event.is_set():
+                settings.log('Paused')
+                pause_start = time.time()
+                while settings.pause_event.is_set() or settings.exit_event.is_set():
+                    time.sleep(.1)
+                    if settings.exit_event.is_set():
+                        raise settings.EndExecution()
+                time_start += time.time() - pause_start
+            try:
+                symbol = symbol.rstrip()
+                settings.current_stage = "Processing: " + symbol
+                settings.log("Processing: " + symbol)
+                time_diff = time.time() - time_start
+                settings.runtime = str(time.strftime("%H:%M:%S", time.gmtime(time_diff)))
+                if funds_read != 0:
+                    settings.time_remaining = str(time.strftime("%H:%M:%S", time.gmtime(
+                        (time_diff / funds_read) * (total_funds - funds_read))))
+                funds_read += 1
+                if shouldBeFiltered(symbol):
+                    settings.log('Filtered ' + symbol)
+                    continue
+                if tickers_csv.isInCSV(symbol) or failed_tickers_csv.isInCSV(symbol):
+                    settings.log(symbol + ' already obtained. Skipping...')
+                    continue
+                api_response = api_caller.getFundInfo(symbol)
+                if '200' not in str(api_response):
+                    settings.log('Api Response of %s for %s. Skipping...' % (api_response, symbol))
+                    settings.AddToLog('processSymbols()', symbol, settings.LogTypes.debug, str(api_response))
+                    failed_tickers_csv.write(my_ticker.toVerboseCSV() + ["API Response of " + str(api_response)])
+                    if '432' in str(api_response):
+                        raise Exception('Out of API Calls! Stopping!')
+                    if '401' in str(api_response) or '403' in str(api_response):
+                        raise Exception('Incorrect API Key! Stopping!')
+                    continue
+                symbol_dict = json.loads(api_response.text)
+                my_ticker = MyTicker(symbol)
+                default_key_statistics = symbol_dict[Fund.default_key_statistics.value]
+                if DefaultKeyStatistics.fund_inception_date.value in default_key_statistics \
+                        and len(default_key_statistics[DefaultKeyStatistics.fund_inception_date.value]) > 0:
+                    is_too_young_data = is_too_young(
+                        default_key_statistics[DefaultKeyStatistics.fund_inception_date.value][Format.formatted.value])
+                else:
+                    is_too_young_data = is_too_young()
+                if is_too_young_data[0]:
+                    settings.AddTimeBomb(symbol, is_too_young_data[1])
+                    failed_tickers_csv.write(my_ticker.toVerboseCSV() +
+                                             ["<10 years old. Will be 10 on " + is_too_young_data[1]])
+                    settings.log('%s is too young. Will be old enough on %s' % (symbol, is_too_young_data[1]))
+                    continue
+                quote_type = symbol_dict[Fund.quote_type.value]
+                fund_profile = symbol_dict[Fund.fund_profile.value]
+                fund_performance = symbol_dict[Fund.fundPerformance.value]
+                summary_detail = symbol_dict[Fund.summary_detail.value]
+                my_ticker.brokerages = fund_profile[FundProfile.brokerages.value]
+                my_ticker.category = fund_profile[FundProfile.category_name.value]
+                my_ticker.legal_type = fund_profile[FundProfile.legal_type.value]
+                twelve_b_one = (fund_profile[
+                    FundProfile.fees_expenses_investment.value][FeesExpensesInvestment.twelve_b_one.value])
+                if len(twelve_b_one) > 0:
+                    my_ticker.twelve_b_one = float(fund_profile[FundProfile.fees_expenses_investment.value]
+                                                   [FeesExpensesInvestment.twelve_b_one.value][
+                                                       Format.formatted.value].strip('%'))
                 is_too_young_data = is_too_young(
                     default_key_statistics[DefaultKeyStatistics.fund_inception_date.value][Format.formatted.value])
-            else:
-                is_too_young_data = is_too_young()
-            if is_too_young_data[0]:
-                settings.AddTimeBomb(symbol, is_too_young_data[1])
-                failed_tickers_csv.write(my_ticker.toVerboseCSV() +
-                                         ["<10 years old. Will be 10 on " + is_too_young_data[1]])
-                settings.log('%s is too young. Will be old enough on %s' % (symbol, is_too_young_data[1]))
-                continue
-            quote_type = symbol_dict[Fund.quote_type.value]
-            fund_profile = symbol_dict[Fund.fund_profile.value]
-            fund_performance = symbol_dict[Fund.fundPerformance.value]
-            summary_detail = symbol_dict[Fund.summary_detail.value]
-            my_ticker.brokerages = fund_profile[FundProfile.brokerages.value]
-            my_ticker.category = fund_profile[FundProfile.category_name.value]
-            my_ticker.legal_type = fund_profile[FundProfile.legal_type.value]
-            twelve_b_one = (fund_profile[
-                FundProfile.fees_expenses_investment.value][FeesExpensesInvestment.twelve_b_one.value])
-            if len(twelve_b_one) > 0:
-                my_ticker.twelve_b_one = float(fund_profile[FundProfile.fees_expenses_investment.value]
-                                               [FeesExpensesInvestment.twelve_b_one.value][
-                                                   Format.formatted.value].strip('%'))
-            is_too_young_data = is_too_young(
-                default_key_statistics[DefaultKeyStatistics.fund_inception_date.value][Format.formatted.value])
-            if is_too_young_data[0]:
-                settings.AddTimeBomb(symbol, is_too_young_data[1])
-                failed_tickers_csv.write(my_ticker.toVerboseCSV() +
-                                         ["<10 years old. Will be 10 on " + is_too_young_data[1]])
-                settings.log('%s is too young. Will be old enough on %s' % (symbol, is_too_young_data[1]))
-                continue
-            if my_ticker.legal_type is None or 'Exchange Traded Fund' not in my_ticker.legal_type:
-                my_ticker.rating = int(default_key_statistics[
-                                           DefaultKeyStatistics.morningstar_overall_rating.value][
-                                           Format.raw.value])
-            else:
-                my_ticker.rating = api_caller.getMorningstarRating(my_ticker.symbol)
-            trailing_returns = fund_performance[FundPerformance.trailingReturns.value]
-            my_ticker.year_to_date = float(
-                trailing_returns[TrailingReturns.year_to_date.value][Format.formatted.value].strip('%'))
-            my_ticker.one_month = float(
-                trailing_returns[TrailingReturns.one_month.value][Format.formatted.value].strip('%'))
-            my_ticker.one_year = float(
-                trailing_returns[TrailingReturns.one_year.value][Format.formatted.value].strip('%'))
-            my_ticker.three_year = float(
-                trailing_returns[TrailingReturns.three_year.value][Format.formatted.value].strip('%'))
-            my_ticker.five_year = float(
-                trailing_returns[TrailingReturns.five_year.value][Format.formatted.value].strip('%'))
-            my_ticker.ten_year = float(
-                trailing_returns[TrailingReturns.ten_year.value][Format.formatted.value].strip('%'))
-            my_ticker.negative_year = hasHadNegativeYear(
-                fund_performance[FundPerformance.annual_total_returns.value]['returns'])
-            my_ticker.full_name = quote_type[QuoteType.long_name.value]
-            my_ticker.my_yield = float(
-                summary_detail[SummaryDetail.my_yield.value][Format.formatted.value].strip('%'))
-            if my_ticker.passes_filter()[0]:
-                settings.log('%s complete' % symbol)
-                tickers_csv.write(my_ticker.toCSV())
-            else:
-                settings.log('Filtered %s' % symbol)
-                failed_tickers_csv.write(my_ticker.toVerboseCSV() + [my_ticker.passes_filter()[1]])
-        except KeyError as exception:
-            settings.log('%s threw error %s!' % (symbol, str(exception)))
-            settings.AddToLog('processSymbols()', symbol, settings.LogTypes.error)
-            failed_tickers_csv.write(my_ticker.toVerboseCSV() + ['Threw exception during execution: ' + str(exception)])
-    settings.current_stage = 'Done!'
+                if is_too_young_data[0]:
+                    settings.AddTimeBomb(symbol, is_too_young_data[1])
+                    failed_tickers_csv.write(my_ticker.toVerboseCSV() +
+                                             ["<10 years old. Will be 10 on " + is_too_young_data[1]])
+                    settings.log('%s is too young. Will be old enough on %s' % (symbol, is_too_young_data[1]))
+                    continue
+                if my_ticker.legal_type is None or 'Exchange Traded Fund' not in my_ticker.legal_type:
+                    my_ticker.rating = int(default_key_statistics[
+                                               DefaultKeyStatistics.morningstar_overall_rating.value][
+                                               Format.raw.value])
+                else:
+                    my_ticker.rating = api_caller.getMorningstarRating(my_ticker.symbol)
+                trailing_returns = fund_performance[FundPerformance.trailingReturns.value]
+                my_ticker.year_to_date = float(
+                    trailing_returns[TrailingReturns.year_to_date.value][Format.formatted.value].strip('%'))
+                my_ticker.one_month = float(
+                    trailing_returns[TrailingReturns.one_month.value][Format.formatted.value].strip('%'))
+                my_ticker.one_year = float(
+                    trailing_returns[TrailingReturns.one_year.value][Format.formatted.value].strip('%'))
+                my_ticker.three_year = float(
+                    trailing_returns[TrailingReturns.three_year.value][Format.formatted.value].strip('%'))
+                my_ticker.five_year = float(
+                    trailing_returns[TrailingReturns.five_year.value][Format.formatted.value].strip('%'))
+                my_ticker.ten_year = float(
+                    trailing_returns[TrailingReturns.ten_year.value][Format.formatted.value].strip('%'))
+                my_ticker.negative_year = hasHadNegativeYear(
+                    fund_performance[FundPerformance.annual_total_returns.value]['returns'])
+                my_ticker.full_name = quote_type[QuoteType.long_name.value]
+                my_ticker.my_yield = float(
+                    summary_detail[SummaryDetail.my_yield.value][Format.formatted.value].strip('%'))
+                if my_ticker.passes_filter()[0]:
+                    settings.log('%s complete' % symbol)
+                    tickers_csv.write(my_ticker.toCSV())
+                else:
+                    settings.log('Filtered %s' % symbol)
+                    failed_tickers_csv.write(my_ticker.toVerboseCSV() + [my_ticker.passes_filter()[1]])
+            except KeyError as exception:
+                settings.log('%s threw error %s!' % (symbol, str(exception)), settings.LogTypes.error)
+                failed_tickers_csv.write(my_ticker.toVerboseCSV() + ['Threw exception during execution: ' + str(exception)])
+        settings.current_stage = 'Done!'
+    except settings.EndExecution:
+        settings.log('Stopped')
+        settings.current_stage = 'Stopped'
+    except Exception as exception:
+        settings.log('Thread threw error: %s' % str(exception), settings.LogTypes.error)
+        settings.current_stage = 'Stopped! Exception Raised!'
+
 
 
 class MyLabel(Label):
@@ -394,6 +397,7 @@ class StartupScreen(Screen):
         Clock.schedule_interval(self.update_settings, 0.0)
         self.ids.file_name.text = settings.GetFileName()
         self.ids.failed_file_name.text = settings.GetFailedFileName()
+        self.ids.api_key.text = settings.GetAPIKey()
         self.ids.file_location.text = settings.GetFilePath()
 
     @mainthread
@@ -424,7 +428,6 @@ class StartupScreen(Screen):
             self.ids.start_button.text = 'Start'
         self.ids.runtime_label.text = 'Runtime: ' + settings.runtime
         self.ids.time_label.text = 'Time Remaining: ' + settings.time_remaining
-        self.ids.api_key.text = settings.GetAPIKey()
 
     def adjust_scroll(self, bottom, dt):
         vp_height = self.ids.scroll.viewport_size[1]
@@ -435,15 +438,19 @@ class StartupScreen(Screen):
         global is_overwrite
         global is_refresh_tickers
         if 'Start' in name or 'Resume' in name:
-            self.ids.start_button.text = 'Pause'
+            settings.current_stage = 'Starting'
             settings.SetFileName(self.ids.file_name.text)
             settings.SetFailedFileName(self.ids.failed_file_name.text)
-            settings.SetFilePath(self.ids.file_location.text)
+            settings.SetAPIKey(self.ids.api_key.text)
+            api_caller.initializeHeaders()
+            if not settings.SetFilePath(self.ids.file_location.text):
+                settings.log('Invalid File Path! ' + self.ids.file_location.text)
+                return
             is_overwrite = self.ids.is_overwrite.active
             is_refresh_tickers = self.ids.is_refresh.active
-            settings.SetAPIKey(self.ids.api_key.text)
             settings.pause_event.clear()
             settings.exit_event.clear()
+            self.ids.start_button.text = 'Pause'
             if self.first_start:
                 self.trd = threading.Thread(target=processSymbols, daemon=True)
                 self.trd.start()

@@ -49,7 +49,8 @@ obtained_white_list = False
 
 
 # endregion
-
+class EndExecution(Exception):
+    pass
 
 class LogTypes(enum.Enum):
     error = 'Error:'
@@ -66,11 +67,11 @@ exit_event = threading.Event()
 pause_event = threading.Event()
 
 
-def log(data):
+def log(data, log_type=LogTypes.debug):
     global log_text
     print(data)
     log_text.put('%s' % str(data))
-    AddToLog('Log', data, LogTypes.debug)
+    AddToLog('Log', data, log_type)
 
 
 def CreateSettingsFile():
@@ -102,6 +103,7 @@ def GetAPIKey() -> str:
 
 def SetAPIKey(new_key: str, save_after=True):
     json_loaded[SettingTypes.api_key.value] = new_key
+    print(new_key)
     if save_after:
         SaveSettings()
 
@@ -113,10 +115,11 @@ def GetFilePath() -> str:
     return json_loaded[SettingTypes.file_path.value]
 
 
-def SetFilePath(path_str: str, save_after=True):
+def SetFilePath(path_str: str, save_after=True) -> bool:
     json_loaded[SettingTypes.file_path.value] = path_str
     if save_after:
         SaveSettings()
+    return Path.is_dir(Path(json_loaded[SettingTypes.file_path.value]))
 
 
 def GetFileName() -> str:
@@ -169,6 +172,7 @@ def fillBlacklistFromSettings():
     global obtained_black_list
     obtained_black_list = True
     blacklist.update(set(json_loaded[SettingTypes.filter.value][SettingTypes.blacklist.value]))
+    blacklist.update(set(GetFilteredTimeBombs()))
 
 
 def AddToWhitelist(item, save_after=True):
@@ -274,25 +278,39 @@ def SaveBombs():
 
 
 # region 'Initialization'
-print("Acquiring Settings...")
-try:
-    os.mkdir(os.getcwd() + '\\Data')
-except OSError as Error:
-    pass
-try:
-    os.mkdir(os.getcwd() + '\\Results')
-except OSError as Error:
-    pass
-if not os.path.exists(SETTINGS_FILE):
-    CreateSettingsFile()
-if not os.path.exists(TIME_BOMB_FILE):
-    CreateTimebombFile()
-settings_file = open(SETTINGS_FILE)
-time_bomb_file = open(TIME_BOMB_FILE)
-json_loaded: json = json.load(settings_file)
-json_time_bombs: json = json.load(time_bomb_file)
-print(json_loaded)
-print("Settings Acquired!")
-settings_file.close()
-time_bomb_file.close()
+settings_file = None
+time_bomb_file = None
+json_loaded: json = None
+json_time_bombs: json = None
+
+
+def Init():
+    global settings_file
+    global time_bomb_file
+    global json_loaded
+    global json_time_bombs
+    print("Acquiring Settings...")
+    try:
+        os.mkdir(os.getcwd() + '\\Data')
+    except OSError:
+        pass
+    try:
+        os.mkdir(os.getcwd() + '\\Results')
+    except OSError:
+        pass
+    if not os.path.exists(SETTINGS_FILE):
+        CreateSettingsFile()
+    if not os.path.exists(TIME_BOMB_FILE):
+        CreateTimebombFile()
+    settings_file = open(SETTINGS_FILE)
+    time_bomb_file = open(TIME_BOMB_FILE)
+    json_loaded = json.load(settings_file)
+    json_time_bombs = json.load(time_bomb_file)
+    print(json_loaded)
+    print("Settings Acquired!")
+    settings_file.close()
+    time_bomb_file.close()
+
+
+Init()
 # endregion
