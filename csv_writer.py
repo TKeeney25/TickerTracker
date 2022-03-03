@@ -11,10 +11,12 @@ class CSVWriter:
             self._initializeCSV()
 
     def _initializeCSV(self):
+        open(self.file_name, 'w').close()
         with open(self.file_name, 'w', newline='') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(self.header)
             self.symbols.add(self.header[0])
+            csv_file.flush()
 
     def write(self, values: list):
         with open(self.file_name, 'a', newline='') as csv_file:

@@ -78,8 +78,7 @@ def getAllFunds() -> []:
                     while settings.pause_event.is_set() or settings.exit_event.is_set():
                         time.sleep(.1)
                         if settings.exit_event.is_set():
-                            settings.log('Exiting')
-                            exit(-1)
+                            raise settings.EndExecution()
                     time_start += time.time() - pause_start
                 time_diff = time.time() - time_start
                 settings.runtime = str(time.strftime("%H:%M:%S", time.gmtime(time_diff)))
@@ -135,8 +134,7 @@ def getAllFunds() -> []:
                         while settings.pause_event.is_set() or settings.exit_event.is_set():
                             time.sleep(.1)
                             if settings.exit_event.is_set():
-                                settings.log('Exiting')
-                                exit(-1)
+                                raise settings.EndExecution()
                         time_start += time.time() - pause_start
                     time_diff = time.time() - time_start
                     settings.runtime = str(time.strftime("%H:%M:%S", time.gmtime(time_diff)))
@@ -274,8 +272,7 @@ class Funds:
                 while settings.pause_event.is_set() or settings.exit_event.is_set():
                     time.sleep(.1)
                     if settings.exit_event.is_set():
-                        settings.log('Exiting')
-                        exit(-1)
+                        raise settings.EndExecution()
                 time_start += time.time() - pause_start
             time_diff = time.time() - time_start
             settings.runtime = str(time.strftime("%H:%M:%S", time.gmtime(time_diff)))

@@ -26,6 +26,23 @@ MS_HEADERS = {
     'x-rapidapi-host': "ms-finance.p.rapidapi.com",
     'x-rapidapi-key': settings.GetAPIKey()
 }
+
+
+def initializeHeaders():
+    global YH_HEADERS
+    global MS_HEADERS
+    YH_HEADERS = {
+        'content-type': "application/json",
+        'x-rapidapi-host': "yh-finance.p.rapidapi.com",
+        'x-rapidapi-key': settings.GetAPIKey()
+    }
+
+    MS_HEADERS = {
+        'x-rapidapi-host': "ms-finance.p.rapidapi.com",
+        'x-rapidapi-key': settings.GetAPIKey()
+    }
+
+
 # endregion
 
 
@@ -80,11 +97,10 @@ def screen(offset: int, size: int, screen_type: ScreenTypes, payload='') -> json
     querystring = {"quoteType": screen_type.value, "sortField": "fundnetassets", "region": "US",
                    "offset": str(offset), "sortType": "DESC", "size": str(size)}
     response = requests.request("POST", url, data=screener_payload, headers=YH_HEADERS, params=querystring)
+    print(YH_HEADERS)
     print(response)
-    if '401' in str(response):
-        settings.log('Incorrect API Key! Stopping!')
-        settings.current_stage = 'Stopped'
-        exit(-1)
+    if '401' in str(response) or '403' in str(response):
+        raise Exception('Incorrect API Key! Stopping!')
     return json.loads(response.text)
 
 
@@ -104,7 +120,8 @@ def screenBetweenFundPrices(
     return doAPICall(YHFunctions.screen, offset, size, screen_type, screener_payload)
 
 
-def screenGreaterThanFundPrices(offset: int, size: int, screen_type: ScreenTypes, greater_than: float, dont_care=0) -> json:
+def screenGreaterThanFundPrices(offset: int, size: int, screen_type: ScreenTypes, greater_than: float,
+                                dont_care=0) -> json:
     screener_payload = '''
             ,
             {
@@ -190,4 +207,3 @@ def doAPICall(function: Union[YHFunctions, MSFunctions], *args) -> Any:
                 sleep(5)
     else:
         return None
-
