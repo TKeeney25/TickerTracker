@@ -9,6 +9,7 @@ from functools import partial
 from queue import Queue
 from typing import Union
 
+import re
 import pyjokes
 from dateutil.relativedelta import relativedelta
 from kivy.app import App
@@ -213,6 +214,8 @@ def shouldBeFiltered(symbol: str) -> bool:
     if '^' in symbol:
         return True
     if '-' in symbol:
+        return True
+    if bool(re.search(r'\d', symbol)):
         return True
     return False
 
@@ -448,6 +451,8 @@ class StartupScreen(Screen):
                 return
             is_overwrite = self.ids.is_overwrite.active
             is_refresh_tickers = self.ids.is_refresh.active
+            self.ids.is_overwrite.active = False
+            self.ids.is_refresh.active = False
             settings.pause_event.clear()
             settings.exit_event.clear()
             self.ids.start_button.text = 'Pause'

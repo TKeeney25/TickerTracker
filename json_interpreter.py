@@ -285,21 +285,27 @@ class Funds:
             if ScreenTypes.mutual_fund == type:
                 call = self.calls[call_num]
                 if len(call) < 2:
-                    my_json = (function.value(offset, MAX_CALL_SIZE, type, call[0])[
+                    my_json = (api_caller.screenGreaterThanFundPrices(offset, MAX_CALL_SIZE, type, call[0])[
                         ScreenerEnum.finance.value][ScreenerEnum.result.value][0])
                 else:
-                    my_json = (function.value(offset, MAX_CALL_SIZE, type, call[0], call[1])[
+                    my_json = (api_caller.screenBetweenFundPrices(offset, MAX_CALL_SIZE, type, call[0], call[1])[
                         ScreenerEnum.finance.value][ScreenerEnum.result.value][0])
                 total_funds = my_json[ScreenerEnum.total.value]
                 if total_funds > 9999:
-                    old_call = call[1]
-                    call[1] = (old_call + call[0]) / 2
-                    self.calls[call_num] = call
-                    self.calls.insert(call_num + 1, [call[1] - .1, old_call])
+                    if len(call) < 2:
+                        old_call = round(call[0] * 1.5)
+                        call.append(old_call)
+                        self.calls[call_num] = call
+                        self.calls.insert(call_num + 1, [call[1] - .1])
+                    else:
+                        old_call = call[1]
+                        call[1] = (old_call + call[0]) / 2
+                        self.calls[call_num] = call
+                        self.calls.insert(call_num + 1, [call[1] - .1, old_call])
                     settings.log('Data set too big! Now screening Mutual funds with fund price in range: %s' % str(call))
                     self.json_load[Symbols.complete.value][Complete.subsection.value] = str(call)
             else:
-                my_json = (function.value(offset, MAX_CALL_SIZE, type)[
+                my_json = (api_caller.screen(offset, MAX_CALL_SIZE, type)[
                     ScreenerEnum.finance.value][ScreenerEnum.result.value][0])
                 total_funds = my_json[ScreenerEnum.total.value]
 
