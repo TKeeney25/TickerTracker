@@ -1,6 +1,7 @@
 import enum
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -9,8 +10,6 @@ from functools import partial
 from queue import Queue
 from typing import Union
 
-import re
-import pyjokes
 from dateutil.relativedelta import relativedelta
 from kivy.app import App
 from kivy.clock import Clock, mainthread
@@ -21,9 +20,10 @@ from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen, ScreenManager
 
 import api_caller
-import settings
 import json_interpreter
+import settings
 from csv_writer import CSVWriter
+from statics import log_types
 
 Window.size = (1280, 960)
 
@@ -237,6 +237,7 @@ is_refresh_tickers = False
 
 
 def processSymbols():
+    global failed_tickers_csv, tickers_csv
     try:
         funds_read = 0
         settings.current_stage = 'Starting...'
@@ -279,7 +280,7 @@ def processSymbols():
                 api_response = api_caller.getFundInfo(symbol)
                 if '200' not in str(api_response):
                     settings.log('Api Response of %s for %s. Skipping...' % (api_response, symbol))
-                    settings.AddToLog('processSymbols()', symbol, settings.LogTypes.debug, str(api_response))
+                    settings.AddToLog('processSymbols()', symbol, log_types.debug, str(api_response))
                     failed_tickers_csv.write(my_ticker.toVerboseCSV() + ["API Response of " + str(api_response)])
                     if '432' in str(api_response):
                         raise Exception('Out of API Calls! Stopping!')
@@ -354,14 +355,14 @@ def processSymbols():
                     settings.log('Filtered %s' % symbol)
                     failed_tickers_csv.write(my_ticker.toVerboseCSV() + [my_ticker.passes_filter()[1]])
             except KeyError as exception:
-                settings.log('%s threw error %s!' % (symbol, str(exception)), settings.LogTypes.error)
+                settings.log('%s threw error %s!' % (symbol, str(exception)), log_types.error)
                 failed_tickers_csv.write(my_ticker.toVerboseCSV() + ['Threw exception during execution: ' + str(exception)])
         settings.current_stage = 'Done!'
     except settings.EndExecution:
         settings.log('Stopped')
         settings.current_stage = 'Stopped'
     except Exception as exception:
-        settings.log('Thread threw error: %s' % str(exception), settings.LogTypes.error)
+        settings.log('Thread threw error: %s' % str(exception), log_types.error)
         settings.current_stage = 'Stopped! Exception Raised!'
 
 
@@ -405,12 +406,12 @@ class StartupScreen(Screen):
 
     @mainthread
     def update_settings(self, *args):
-        while not settings.log_text.empty():
+        while not settings.log_text_queue.empty():
             scroll = self.ids.scroll.scroll_y
             vp_height = self.ids.scroll.viewport_size[1]
             sv_height = self.ids.scroll.height
             scroll_lock = scroll == 0.0 or scroll == 1.0
-            add_log = MyLogLabel(text=settings.log_text.get())
+            add_log = MyLogLabel(text=settings.log_text_queue.get())
             self.ids.log_grid.add_widget(add_log)
             self.logs.put(add_log)
             if self.count >= 2000:
@@ -475,14 +476,6 @@ class StartupScreen(Screen):
             self.ids.start_button.text = 'Start'
 
 
-class WelcomeScreen(Screen):
-    button_text = "text"
-
-    def __init__(self, **kwargs):
-        super(WelcomeScreen, self).__init__(**kwargs)
-        self.ids.welcome_label.text = pyjokes.get_joke(language="en", category="all")
-
-
 class TickerTrackerApp(App):
     def __init__(self, **kwargs):
         super(TickerTrackerApp, self).__init__(**kwargs)
@@ -490,15 +483,19 @@ class TickerTrackerApp(App):
 
     def build(self):
         self.icon = r'Data\Images\icon.png'
-        self.root.add_widget(WelcomeScreen(name='Welcome'))
         self.root.add_widget(StartupScreen(name='Startup'))
         return self.root
 
     def goToScreen(self, screen_name: str):
         self.root.switch_to(self.root.get_screen(screen_name))
 
-
 if __name__ == '__main__':
+    try:
+        import pyi_splash
+        pyi_splash.close()
+    except ImportError:
+        pass
+
     try:
         if hasattr(sys, '_MEIPASS'):
             resource_add_path(os.path.join(sys._MEIPASS))

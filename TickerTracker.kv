@@ -1,21 +1,4 @@
 #:import ScrollEffect  kivy.effects.scroll.ScrollEffect
-<WelcomeScreen>:
-    GridLayout:
-        rows: 2
-        cols: 1
-        padding: 50
-        Label:
-            id: welcome_label
-            text: 'Welcome to TickerTracker!'
-            font_size: 48
-            text_size: self.width, None
-            size_hint: 1, 1
-            height: self.texture_size[1]
-        Button:
-            id: main_button
-            size_hint: .2, .2
-            text: 'Start'
-            on_release: root.manager.current = 'Startup'
 <MyLabel>:
     font_size: 36
     size_hint_y: None

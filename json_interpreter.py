@@ -125,7 +125,6 @@ def getAllFunds() -> []:
                     total_funds = json_load[Symbols.complete.value][Complete.offset.value] + 100
                 json_load[Symbols.complete.value][Complete.subsection.value] = str(call)
                 hit_skip_todo = True
-                print(call)
                 while offset <= total_funds:
                     settings.log('Reading: %s/%s' % (str(offset), str(total_funds)))
                     if settings.pause_event.is_set() or settings.exit_event.is_set():

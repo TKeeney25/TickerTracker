@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/TickerTracker.iml" filepath="$PROJECT_DIR$/.idea/TickerTracker.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../Updater/.idea/Updater.iml" filepath="$PROJECT_DIR$/../Updater/.idea/Updater.iml" />
     </modules>
   </component>
 </project>

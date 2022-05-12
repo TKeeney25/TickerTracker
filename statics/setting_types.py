@@ -1,0 +1,8 @@
+blacklist = "Blacklist"
+whitelist = "Whitelist"
+filters = "Filters"
+api_key = "APIKey"
+file_path = "FilePath"
+file_name = "FileName"
+failed_file_name = "FailedFileName"
+debug_mode = "DebugMode"

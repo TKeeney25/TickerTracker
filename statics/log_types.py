@@ -1,0 +1,2 @@
+error = 'Error:'
+debug = 'Debug:'
