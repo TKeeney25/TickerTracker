@@ -1,0 +1,78 @@
+<MenuScreen>:
+    GridLayout:
+        rows: 2
+        cols: 1
+        GridLayout:
+            size_hint_y: .05
+            rows: 1
+            cols: 2
+            padding: 0
+            row_force_default: True
+            row_default_height: 50
+            MyButton:
+                text: 'Back'
+                size_hint: None, 1
+                width: 100
+                canvas.before:
+                    Color:
+                        rgba: .1, .1, .1, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+                    Line:
+                        width: .1
+                        rectangle: self.x, self.y, self.width, self.height
+                background_color: .1, .1, .1, 1
+                on_release: root.goBack()
+            FloatLayout:
+                height: 50
+                canvas.before:
+                    Color:
+                        rgba: .1, .1, .1, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+                Label:
+                    pos_hint:{"right":1,"top":1}
+                    pos: 50, self.pos[1]
+                    text: 'TickerTracker'
+        GridLayout:
+            rows: 1
+            cols: 3
+            Widget:
+                size_hint_x: .2
+            GridLayout:
+                rows: 3
+                cols: 1
+                Label:
+                    text: 'TickerTracker'
+                    font_size: 48
+                    size_hint: 1, 1
+                    height: self.texture_size[1]
+                GridLayout:
+                    rows: 5
+                    cols: 1
+                    MyButton:
+                        id: tracker
+                        text: 'Launch Tracker'
+                        size_hint_y: .2
+                        on_release: root.goToScreen(trackerScreen)
+                    Widget:
+                        size_hint_y: .05
+                    MyButton:
+                        id: filter
+                        text: 'Filter Settings'
+                        size_hint_y: .2
+                        on_release: root.goToScreen(filterScreen)
+                    Widget:
+                        size_hint_y: .05
+                    MyButton:
+                        id: exit
+                        text: 'Exit'
+                        size_hint_y: .2
+                        size_hint_x: .1
+                        on_release: root.exit()
+                Widget:
+                    size_hint_y: .3
+            Widget:
+                size_hint_x: .2

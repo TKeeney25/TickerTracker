@@ -14,10 +14,10 @@ from dateutil.relativedelta import relativedelta
 from kivy.app import App
 from kivy.clock import Clock, mainthread
 from kivy.core.window import Window
+from kivy.lang import Builder
 from kivy.resources import resource_add_path
-from kivy.uix.button import Button
-from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen, ScreenManager
+from style_class import *
 
 import api_caller
 import json_interpreter
@@ -314,7 +314,7 @@ def processSymbols():
                 if len(twelve_b_one) > 0:
                     my_ticker.twelve_b_one = float(fund_profile[FundProfile.fees_expenses_investment.value]
                                                    [FeesExpensesInvestment.twelve_b_one.value][
-                                                       Format.formatted.value].replace(',', '').replace('%',''))
+                                                       Format.formatted.value].replace(',', '').replace('%', ''))
                 is_too_young_data = is_too_young(
                     default_key_statistics[DefaultKeyStatistics.fund_inception_date.value][Format.formatted.value])
 
@@ -332,22 +332,30 @@ def processSymbols():
                     my_ticker.rating = api_caller.getMorningstarRating(my_ticker.symbol)
                 trailing_returns = fund_performance[FundPerformance.trailingReturns.value]
                 my_ticker.year_to_date = float(
-                    trailing_returns[TrailingReturns.year_to_date.value][Format.formatted.value].replace(',', '').replace('%',''))
+                    trailing_returns[TrailingReturns.year_to_date.value][Format.formatted.value].replace(',',
+                                                                                                         '').replace(
+                        '%', ''))
                 my_ticker.one_month = float(
-                    trailing_returns[TrailingReturns.one_month.value][Format.formatted.value].replace(',', '').replace('%',''))
+                    trailing_returns[TrailingReturns.one_month.value][Format.formatted.value].replace(',', '').replace(
+                        '%', ''))
                 my_ticker.one_year = float(
-                    trailing_returns[TrailingReturns.one_year.value][Format.formatted.value].replace(',', '').replace('%',''))
+                    trailing_returns[TrailingReturns.one_year.value][Format.formatted.value].replace(',', '').replace(
+                        '%', ''))
                 my_ticker.three_year = float(
-                    trailing_returns[TrailingReturns.three_year.value][Format.formatted.value].replace(',', '').replace('%',''))
+                    trailing_returns[TrailingReturns.three_year.value][Format.formatted.value].replace(',', '').replace(
+                        '%', ''))
                 my_ticker.five_year = float(
-                    trailing_returns[TrailingReturns.five_year.value][Format.formatted.value].replace(',', '').replace('%',''))
+                    trailing_returns[TrailingReturns.five_year.value][Format.formatted.value].replace(',', '').replace(
+                        '%', ''))
                 my_ticker.ten_year = float(
-                    trailing_returns[TrailingReturns.ten_year.value][Format.formatted.value].replace(',', '').replace('%',''))
+                    trailing_returns[TrailingReturns.ten_year.value][Format.formatted.value].replace(',', '').replace(
+                        '%', ''))
                 my_ticker.negative_year = hasHadNegativeYear(
                     fund_performance[FundPerformance.annual_total_returns.value]['returns'])
                 my_ticker.full_name = quote_type[QuoteType.long_name.value]
                 my_ticker.my_yield = float(
-                    summary_detail[SummaryDetail.my_yield.value][Format.formatted.value].replace(',', '').replace('%',''))
+                    summary_detail[SummaryDetail.my_yield.value][Format.formatted.value].replace(',', '').replace('%',
+                                                                                                                  ''))
                 if my_ticker.passes_filter()[0]:
                     settings.log('%s complete' % symbol)
                     tickers_csv.write(my_ticker.toCSV())
@@ -356,7 +364,8 @@ def processSymbols():
                     failed_tickers_csv.write(my_ticker.toVerboseCSV() + [my_ticker.passes_filter()[1]])
             except KeyError as exception:
                 settings.log('%s threw error %s!' % (symbol, str(exception)), log_types.error)
-                failed_tickers_csv.write(my_ticker.toVerboseCSV() + ['Threw exception during execution: ' + str(exception)])
+                failed_tickers_csv.write(
+                    my_ticker.toVerboseCSV() + ['Threw exception during execution: ' + str(exception)])
         settings.current_stage = 'Done!'
     except settings.EndExecution:
         settings.log('Stopped')
@@ -365,31 +374,25 @@ def processSymbols():
         settings.log('Thread threw error: %s' % str(exception), log_types.error)
         settings.current_stage = 'Stopped! Exception Raised!'
 
-
-class MyLabel(Label):
-    pass
-
-
-class MyH1Label(MyLabel):
-    pass
-
-
-class MyH2Label(MyLabel):
-    pass
-
-
-class MyButton(Button):
-    pass
-
-
-class MyLogLabel(Label):
+class MyScreen(Screen):
     def __init__(self, **kwargs):
-        super(MyLogLabel, self).__init__(**kwargs)
+        super(MyScreen, self).__init__(**kwargs)
 
-    pass
+    def goToScreen(self, screen):
+        TickerTrackerApp.goToScreen(screen)
+
+    def goBack(self):
+        TickerTrackerApp.goBack()
+
+    def exit(self):
+        TickerTrackerApp.exit()
+
+class MenuScreen(MyScreen):
+    def __init__(self, **kwargs):
+        super(MenuScreen, self).__init__(**kwargs)
 
 
-class StartupScreen(Screen):
+class TrackerScreen(MyScreen):
     trd = threading.Thread
     first_start = True
     finish_switch = True
@@ -397,7 +400,7 @@ class StartupScreen(Screen):
     logs = Queue()
 
     def __init__(self, **kwargs):
-        super(StartupScreen, self).__init__(**kwargs)
+        super(TrackerScreen, self).__init__(**kwargs)
         Clock.schedule_interval(self.update_settings, 0.0)
         self.ids.file_name.text = settings.GetFileName()
         self.ids.failed_file_name.text = settings.GetFailedFileName()
@@ -476,22 +479,48 @@ class StartupScreen(Screen):
             self.ids.start_button.text = 'Start'
 
 
-class TickerTrackerApp(App):
+Builder.load_file('pages/styles.kv')
+Builder.load_file('pages/menu.kv')
+Builder.load_file('pages/tracker.kv')
+
+
+class TickerTracker(App):
     def __init__(self, **kwargs):
-        super(TickerTrackerApp, self).__init__(**kwargs)
+        super(TickerTracker, self).__init__(**kwargs)
+
         self.root = ScreenManager()
+        self.screenStack = []
 
     def build(self):
         self.icon = r'Data\Images\icon.png'
-        self.root.add_widget(StartupScreen(name='Startup'))
+        self.root.add_widget(MenuScreen(name='Menu'))
+        self.root.add_widget(TrackerScreen(name='Tracker'))
+
         return self.root
 
     def goToScreen(self, screen_name: str):
-        self.root.switch_to(self.root.get_screen(screen_name))
+        self.root.transition.direction = 'left'
+        self.screenStack.insert(0, self.root.current)
+        self._goToScreen(screen_name)
+
+    def goBack(self):
+        if len(self.screenStack) > 0:
+            self.root.transition.direction = 'right'
+            self._goToScreen(self.screenStack.pop())
+
+    def _goToScreen(self, screen_name: str):
+        self.root.current = screen_name
+
+
+    def exit(self):
+        self.stop()
+
+TickerTrackerApp = None
 
 if __name__ == '__main__':
     try:
         import pyi_splash
+
         pyi_splash.close()
     except ImportError:
         pass
@@ -499,7 +528,8 @@ if __name__ == '__main__':
     try:
         if hasattr(sys, '_MEIPASS'):
             resource_add_path(os.path.join(sys._MEIPASS))
-        TickerTrackerApp().run()
+        TickerTrackerApp = TickerTracker()
+        TickerTrackerApp.run()
 
     except Exception as e:
         print(e)

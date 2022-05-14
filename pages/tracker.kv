@@ -1,33 +1,43 @@
 #:import ScrollEffect  kivy.effects.scroll.ScrollEffect
-<MyLabel>:
-    font_size: 36
-    size_hint_y: None
-    height: self.texture_size[1]
-<MyH1Label>:
-    font_size: 24
-    size_hint_y: None
-<MyH2Label>:
-    halign: 'left'
-    font_size: 16
-    text_size: self.size
-<MyButton>:
-    height: self.texture_size[1]*2
-    size_hint_y: None
-    font_size: 16
-<MyLogLabel>:
-    color: 1, 1, 1, 1
-    font_size: 12
-    text_size: self.width, None
-    halign: 'left'
-    valign: 'top'
-    size_hint_y: None
-    height: 14
 
-<StartupScreen>:
-    BoxLayout:
-        orientation: 'vertical'
-        MyH1Label:
-            text: 'TickerTracker'
+<TrackerScreen>:
+    GridLayout:
+        rows: 2
+        cols: 1
+        GridLayout:
+            size_hint_y: .05
+            rows: 1
+            cols: 2
+            padding: 0
+            row_force_default: True
+            row_default_height: 50
+            MyButton:
+                text: 'Back'
+                size_hint: None, 1
+                width: 100
+                canvas.before:
+                    Color:
+                        rgba: .1, .1, .1, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+                    Line:
+                        width: .1
+                        rectangle: self.x, self.y, self.width, self.height
+                background_color: .1, .1, .1, 1
+                on_release: root.goBack()
+            FloatLayout:
+                height: 50
+                canvas.before:
+                    Color:
+                        rgba: .1, .1, .1, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+                Label:
+                    pos_hint:{"right":1,"top":1}
+                    pos: 50, self.pos[1]
+                    text: 'TickerTracker'
         GridLayout:
             rows: 1
             cols: 2
