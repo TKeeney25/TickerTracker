@@ -1,0 +1,118 @@
+#:import DropDown kivy.uix.dropdown
+#:import ScrollEffect  kivy.effects.scroll.ScrollEffect
+#:import DragBehavior kivy.uix.behaviors
+<Spacer>
+    size_hint_max_y: 10
+    size_hint_min_y: 10
+
+<FilterButton>
+    size_hint_max_x: 100
+
+<DragLabel>:
+    drag_rectangle: self.x, self.y, self.width, self.height
+    drag_timeout: 10000000
+    drag_distance: 0
+    size_hint: None, None
+    height: 30
+    width: 100
+    canvas.before:
+        Color:
+            rgba: .4, .4, .4, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+<FilterScreen>
+    GridLayout:
+        rows: 2
+        cols: 1
+        GridLayout:
+            size_hint_y: .05
+            rows: 1
+            cols: 2
+            padding: 0
+            row_force_default: True
+            row_default_height: 50
+            MyButton:
+                text: 'Back'
+                size_hint: None, 1
+                width: 100
+                canvas.before:
+                    Color:
+                        rgba: .1, .1, .1, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+                    Line:
+                        width: .1
+                        rectangle: self.x, self.y, self.width, self.height
+                background_color: .1, .1, .1, 1
+                on_release: root.goBack()
+            GridLayout:
+                rows: 1
+                cols: 1
+                height: 50
+                canvas.before:
+                    Color:
+                        rgba: .1, .1, .1, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+                Label:
+                    pos_hint:{"right":1,"top":1}
+                    pos: 50, self.pos[1]
+                    text: 'TickerTracker'
+        GridLayout:
+            rows: 1
+            cols: 2
+            padding: 10
+            GridLayout:
+                rows: 3
+                cols: 1
+                padding: 0, 0, 10, 0
+                size_hint_x: .4
+                MyLabel:
+                    text: 'Filters'
+                GridLayout:
+                    rows: 1
+                    cols: 3
+                    size_hint_y: .1
+                    size_hint_max_y: 35
+                    size_hint_min_y: 35
+                    padding: 0
+                    Button:
+                        id: LogicButton
+                        text: 'Logic'
+                        disabled: True
+                        on_release: root.changeFilter('Logic')
+                    Button:
+                        id: DataButton
+                        text: 'Data'
+                        on_release: root.changeFilter('Data')
+                    Button:
+                        id: CustomButton
+                        text: 'Custom'
+                        on_release: root.changeFilter('Custom')
+                ScrollView:
+                    id: filter_scroll
+                    effect_cls: ScrollEffect
+                    canvas.before:
+                        Color:
+                            rgba: .1, .1, .1, 1
+                        Rectangle:
+                            pos: self.pos
+                            size: self.size
+            ScrollView:
+                id: log_grid
+                do_scroll_x: True
+                do_scroll_y: False
+                canvas.before:
+                    Color:
+                        rgba: .1, .1, .1, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+                padding: 10
+                BoxLayout:
+                    orientation: 'horizontal'
+                    id: filter_pan

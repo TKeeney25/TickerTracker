@@ -185,7 +185,8 @@ class Funds:
                                                    Complete.offset.value: 0,
                                                    Complete.section.value: ScreenTypes.etf.value,
                                                    Complete.subsection.value: ''},
-                          Symbols.symbols.value: []}
+                          Symbols.symbols.value: [],
+                          'symbol_data': []}
         self.min_call = -10
         self.max_call = 60
         self.calls = [[self.min_call, self.max_call], [59.9]]
@@ -202,7 +203,7 @@ class Funds:
                 settings.log('Screening: ETFs')
                 settings.current_stage = 'Screening: ETFs'
                 offset = self.json_load[Symbols.complete.value][Complete.offset.value]
-                self._do_screen(api_caller.YHFunctions.screen, offset, ScreenTypes.etf, -1)
+                self._do_screen(offset, ScreenTypes.etf)
                 self.json_load[Symbols.complete.value][Complete.section.value] = ScreenTypes.mutual_fund.value
                 self.json_load[Symbols.complete.value][Complete.offset.value] = 0
                 self._saveJsonFile()
@@ -227,17 +228,13 @@ class Funds:
                     settings.log('Screening Mutual funds with fund price in range: %s' % str(call))
                     if len(call) > 1:
                         offset = self.json_load[Symbols.complete.value][Complete.offset.value]
-                        self._do_screen(
-                            api_caller.YHFunctions.screenBetweenFundPrices, offset, ScreenTypes.mutual_fund,
-                            num)
+                        self._do_screen(offset, ScreenTypes.mutual_fund, num)
                         self.json_load[Symbols.complete.value][Complete.subsection.value] = str(self.calls[num + 1])
                         self.json_load[Symbols.complete.value][Complete.offset.value] = 0
                         self._saveJsonFile()
                     else:
                         offset = self.json_load[Symbols.complete.value][Complete.offset.value]
-                        self._do_screen(
-                            api_caller.YHFunctions.screenGreaterThanFundPrices, offset, ScreenTypes.mutual_fund,
-                            num)
+                        self._do_screen(offset, ScreenTypes.mutual_fund, num)
                         self.json_load[Symbols.complete.value][Complete.is_complete.value] = True
                         self.json_load[Symbols.complete.value][Complete.section.value] = ''
                         self.json_load[Symbols.complete.value][Complete.subsection.value] = ''
@@ -260,9 +257,9 @@ class Funds:
         json_file.write(json.dumps(self.json_load, indent=4, sort_keys=True))
         json_file.close()
 
-    def _do_screen(self, function: api_caller.YHFunctions, offset: int, type, call_num=-1) -> []:
+    def _do_screen(self, offset: int, screentype, call_num=-1) -> []:
         time_start = time.time()
-        total_funds = offset + 100
+        total_funds = offset + 3000
         while offset <= total_funds:
             settings.log('Reading: %s/%s' % (str(offset), str(total_funds)))
             if settings.pause_event.is_set() or settings.exit_event.is_set():
@@ -281,13 +278,13 @@ class Funds:
             settings.total_funds = total_funds
             settings.funds_read = offset
             self.json_load[Symbols.complete.value][Complete.offset.value] = offset
-            if ScreenTypes.mutual_fund == type:
+            if ScreenTypes.mutual_fund == screentype:
                 call = self.calls[call_num]
                 if len(call) < 2:
-                    my_json = (api_caller.screenGreaterThanFundPrices(offset, MAX_CALL_SIZE, type, call[0])[
+                    my_json = (api_caller.screenGreaterThanFundPrices(offset, MAX_CALL_SIZE, screentype, call[0])[
                         ScreenerEnum.finance.value][ScreenerEnum.result.value][0])
                 else:
-                    my_json = (api_caller.screenBetweenFundPrices(offset, MAX_CALL_SIZE, type, call[0], call[1])[
+                    my_json = (api_caller.screenBetweenFundPrices(offset, MAX_CALL_SIZE, screentype, call[0], call[1])[
                         ScreenerEnum.finance.value][ScreenerEnum.result.value][0])
                 total_funds = my_json[ScreenerEnum.total.value]
                 if total_funds > 9999:
@@ -304,7 +301,7 @@ class Funds:
                     settings.log('Data set too big! Now screening Mutual funds with fund price in range: %s' % str(call))
                     self.json_load[Symbols.complete.value][Complete.subsection.value] = str(call)
             else:
-                my_json = (api_caller.screen(offset, MAX_CALL_SIZE, type)[
+                my_json = (api_caller.screen(offset, MAX_CALL_SIZE, screentype)[
                     ScreenerEnum.finance.value][ScreenerEnum.result.value][0])
                 total_funds = my_json[ScreenerEnum.total.value]
 

@@ -24,7 +24,9 @@
                         rectangle: self.x, self.y, self.width, self.height
                 background_color: .1, .1, .1, 1
                 on_release: root.goBack()
-            FloatLayout:
+            GridLayout:
+                rows: 1
+                cols: 1
                 height: 50
                 canvas.before:
                     Color:
@@ -61,7 +63,8 @@
                         size_hint_y: .05
                     MyButton:
                         id: filter
-                        text: 'Filter Settings'
+                        text: 'Filter Settings - *WIP* Not Functional'
+                        disabled: True
                         size_hint_y: .2
                         on_release: root.goToScreen(filterScreen)
                     Widget:

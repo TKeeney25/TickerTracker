@@ -1,7 +1,5 @@
-import enum
 import json
 import os
-import re
 import sys
 import threading
 import time
@@ -10,174 +8,25 @@ from functools import partial
 from queue import Queue
 from typing import Union
 
-from dateutil.relativedelta import relativedelta
 from kivy.app import App
 from kivy.clock import Clock, mainthread
 from kivy.core.window import Window
 from kivy.lang import Builder
 from kivy.resources import resource_add_path
 from kivy.uix.screenmanager import Screen, ScreenManager
-from style_class import *
+from requests import Response
 
 import api_caller
 import json_interpreter
 import settings
+import summary
+import util
 from csv_writer import CSVWriter
 from statics import log_types
+from style_class import *
+from summary import Results
 
 Window.size = (1280, 960)
-
-
-# region 'Enums'
-
-
-class FeesExpensesInvestment(enum.Enum):
-    twelve_b_one = 'twelveBOne'
-
-
-class QuoteType(enum.Enum):
-    long_name = 'longName'
-
-
-class TrailingReturns(enum.Enum):
-    year_to_date = 'ytd'
-    one_month = 'oneMonth'
-    one_year = 'oneYear'
-    three_year = 'threeYear'
-    five_year = 'fiveYear'
-    ten_year = 'tenYear'
-
-
-class SummaryDetail(enum.Enum):
-    my_yield = 'yield'
-
-
-class DefaultKeyStatistics(enum.Enum):
-    morningstar_overall_rating = 'morningStarOverallRating'
-    legal_type = 'legalType'
-    fund_inception_date = 'fundInceptionDate'
-
-
-class FundPerformance(enum.Enum):
-    trailingReturns = 'trailingReturns'
-    annual_total_returns = 'annualTotalReturns'
-
-
-class FundProfile(enum.Enum):
-    fund_inception_date = 'fundInceptionDate'
-    category_name = 'categoryName'
-    brokerages = 'brokerages'
-    legal_type = 'legalType'
-    fees_expenses_investment = 'feesExpensesInvestment'
-
-
-class Fund(enum.Enum):
-    default_key_statistics = 'defaultKeyStatistics'
-    fundPerformance = 'fundPerformance'
-    fund_profile = 'fundProfile'
-    quote_type = 'quoteType'
-    summary_detail = 'summaryDetail'
-
-
-class Format(enum.Enum):
-    raw = 'raw'
-    formatted = 'fmt'
-    long_formatted = 'longFmt'
-
-
-# endregion
-
-
-def boolToStr(conditional: bool) -> str:
-    if conditional:
-        return 'Y'
-    else:
-        return 'N'
-
-
-class MyTicker:
-    default_string = ''
-    default_float = float('-inf')
-    default_int = -1
-
-    def __init__(self, symbol: str):
-        self.symbol: str = symbol
-        self.full_name: str = self.default_string
-        self.category: str = self.default_string
-        self.year_to_date: float = self.default_float
-        self.one_month: float = self.default_float
-        self.one_year: float = self.default_float
-        self.three_year: float = self.default_float
-        self.five_year: float = self.default_float
-        self.ten_year: float = self.default_float
-        self.my_yield: float = self.default_float
-        self.rating: int = self.default_int
-        self.negative_year: bool = False
-        self.legal_type: str = self.default_string
-        self.twelve_b_one: float = 0
-        self.brokerages: list = []
-
-    def toCSV(self) -> []:
-        return [self.symbol, self.full_name.replace(',', ''), self.category, self.year_to_date, self.one_month,
-                self.one_year, self.three_year, self.five_year, self.ten_year, self.my_yield, self.rating,
-                boolToStr(self.negative_year)]
-
-    def toVerboseCSV(self) -> []:
-        return self.toCSV() + [self.legal_type, self.twelve_b_one, str(self.brokerages).replace(',', '')]
-
-    def __str__(self):
-        return 'Symbol: %s, Full Name: %s, Category: %s, YTD: %s, 4-Week: %s, 1-Year: %s, 3-Year: %s, 5-Year: %s, ' \
-               '10-Year: %s, Yield: %s, Morningstar Rating: %s, Negative Year: %s, Legal Type: %s, 12 b-1: %s,' \
-               ' Brokerages: %s' \
-               % (self.symbol, self.full_name, self.category, str(self.year_to_date),
-                  str(self.one_month), str(self.one_year), str(self.three_year), str(self.five_year),
-                  str(self.ten_year), str(self.my_yield), str(self.rating), str(self.negative_year),
-                  self.legal_type, str(self.twelve_b_one), str(self.brokerages).replace(',', ''))
-
-    def has_defaults(self) -> [Union[bool, str]]:
-        if len(self.full_name) == 0:
-            return [False, 'Contains Default Values']
-        if self.year_to_date == self.default_float:
-            return [False, 'Contains Default Values']
-        if self.one_year == self.default_float:
-            return [False, 'Contains Default Values']
-        if self.three_year == self.default_float:
-            return [False, 'Contains Default Values']
-        if self.five_year == self.default_float:
-            return [False, 'Contains Default Values']
-        if self.ten_year == self.default_float:
-            return [False, 'Contains Default Values']
-        if self.my_yield == self.default_float:
-            return [False, 'Contains Default Values']
-        if self.rating == self.default_int:
-            return [False, 'Contains Default Values']
-        return [True, '']
-
-    def passes_filter(self) -> [Union[bool, str]]:
-        defaults = self.has_defaults()
-        if not defaults[0]:
-            return defaults
-        if len(self.brokerages) > 0:
-            fail = True
-            for broker in self.brokerages:
-                if 'LPL SWM' in broker:
-                    fail = False
-                    break
-            if fail:
-                return [False, 'LPL SWM not in brokerages']
-        if self.rating is None or self.rating < 4:
-            return [False, 'Has Morningstar rating of: ' + str(self.rating)]
-        if self.ten_year <= 0:
-            return [False, 'Has a ten year return of: ' + str(self.ten_year)]
-        if self.five_year <= 0:
-            return [False, 'Has a ten year return of: ' + str(self.five_year)]
-        if self.three_year <= 0:
-            return [False, 'Has a ten year return of: ' + str(self.three_year)]
-        if self.one_year <= 0:
-            return [False, 'Has a ten year return of: ' + str(self.one_year)]
-        if self.twelve_b_one > 0:
-            return [False, 'Has a 12b-1 of: ' + str(self.twelve_b_one)]
-        return [True, 'Passed']
 
 
 def loadSymbols(force_refresh=False) -> {}:
@@ -195,43 +44,6 @@ def loadSymbols(force_refresh=False) -> {}:
     return json_load
 
 
-def hasHadNegativeYear(returns: list, year_span=10) -> bool:
-    current_year = date.today().year
-    year_range = range(current_year - year_span, current_year)
-    for single_return in returns:
-        if int(single_return['year']) in year_range:
-            if len(single_return['annualValue']) > 0:
-                if float(single_return['annualValue'][Format.raw.value]) < 0:
-                    return True
-    return False
-
-
-def shouldBeFiltered(symbol: str) -> bool:
-    if settings.isInWhitelist(symbol):
-        return False
-    if settings.isInBlacklist(symbol):
-        return True
-    if '^' in symbol:
-        return True
-    if '-' in symbol:
-        return True
-    if bool(re.search(r'\d', symbol)):
-        return True
-    return False
-
-
-def is_too_young(my_time='') -> [Union[bool, str]]:
-    today = date.today()
-    datetime_today = datetime(today.year, today.month, today.day)
-    if len(my_time) > 0:
-        time_plus_ten = datetime.strptime(my_time, settings.TIME_STRING) + relativedelta(years=10)
-    else:
-        time_plus_ten = datetime_today + relativedelta(days=1)
-    if time_plus_ten > datetime_today:
-        return [True, time_plus_ten.strftime(settings.TIME_STRING)]
-    return [False, '']
-
-
 is_overwrite = False
 is_refresh_tickers = False
 
@@ -239,17 +51,15 @@ is_refresh_tickers = False
 def processSymbols():
     global failed_tickers_csv, tickers_csv
     try:
-        funds_read = 0
+        funds_read = 0  # Track all the funds read for displaying purposes
         settings.current_stage = 'Starting...'
-        headers = ['Ticker', 'Name', 'Category', 'YTD', '4W', '1Y', '3Y', '5Y', '10Y', 'Yield', 'Rating', 'Neg. Yr']
-        failed_headers = headers + ['12b-1', 'Brokerages', 'Failed Reason']
-        for i in range(2):
-            tickers_csv = \
-                CSVWriter(settings.GetFilePath() + '\\' + settings.GetFileName(), headers, is_overwrite)
-            failed_tickers_csv = \
-                CSVWriter(settings.GetFilePath() + '\\' + settings.GetFailedFileName(), failed_headers, is_overwrite)
+        results = Results({})
+        summary.passesFilter(results)
+        headers = results.getCSVTitles() + summary.getFlags(results)[0]
+        tickers_csv = CSVWriter(settings.GetFilePath() + '\\' + settings.GetFileName(), headers, is_overwrite)
+        failed_tickers_csv = CSVWriter(settings.GetFilePath() + '\\' + settings.GetFailedFileName(), headers,
+                                       is_overwrite)
         symbol_list = loadSymbols(is_refresh_tickers)['symbols']
-        my_ticker = MyTicker('')
         total_funds = len(symbol_list)
         time_start = time.time()
         for symbol in symbol_list:
@@ -271,101 +81,29 @@ def processSymbols():
                     settings.time_remaining = str(time.strftime("%H:%M:%S", time.gmtime(
                         (time_diff / funds_read) * (total_funds - funds_read))))
                 funds_read += 1
-                if shouldBeFiltered(symbol):
-                    settings.log('Filtered ' + symbol)
-                    continue
                 if tickers_csv.isInCSV(symbol) or failed_tickers_csv.isInCSV(symbol):
                     settings.log(symbol + ' already obtained. Skipping...')
                     continue
-                api_response = api_caller.getFundInfo(symbol)
+                api_response: Response = api_caller.getFundInfo(symbol)
                 if '200' not in str(api_response):
                     settings.log('Api Response of %s for %s. Skipping...' % (api_response, symbol))
                     settings.AddToLog('processSymbols()', symbol, log_types.debug, str(api_response))
-                    failed_tickers_csv.write(my_ticker.toVerboseCSV() + ["API Response of " + str(api_response)])
                     if '432' in str(api_response):
                         raise Exception('Out of API Calls! Stopping!')
                     if '401' in str(api_response) or '403' in str(api_response):
                         raise Exception('Incorrect API Key! Stopping!')
                     continue
                 symbol_dict = json.loads(api_response.text)
-                my_ticker = MyTicker(symbol)
-                default_key_statistics = symbol_dict[Fund.default_key_statistics.value]
-                if DefaultKeyStatistics.fund_inception_date.value in default_key_statistics \
-                        and len(default_key_statistics[DefaultKeyStatistics.fund_inception_date.value]) > 0:
-                    is_too_young_data = is_too_young(
-                        default_key_statistics[DefaultKeyStatistics.fund_inception_date.value][Format.formatted.value])
-                else:
-                    is_too_young_data = is_too_young()
-                if is_too_young_data[0]:
-                    settings.AddTimeBomb(symbol, is_too_young_data[1])
-                    failed_tickers_csv.write(my_ticker.toVerboseCSV() +
-                                             ["<10 years old. Will be 10 on " + is_too_young_data[1]])
-                    settings.log('%s is too young. Will be old enough on %s' % (symbol, is_too_young_data[1]))
-                    continue
-                quote_type = symbol_dict[Fund.quote_type.value]
-                fund_profile = symbol_dict[Fund.fund_profile.value]
-                fund_performance = symbol_dict[Fund.fundPerformance.value]
-                summary_detail = symbol_dict[Fund.summary_detail.value]
-                my_ticker.brokerages = fund_profile[FundProfile.brokerages.value]
-                my_ticker.category = fund_profile[FundProfile.category_name.value]
-                my_ticker.legal_type = fund_profile[FundProfile.legal_type.value]
-                twelve_b_one = (fund_profile[
-                    FundProfile.fees_expenses_investment.value][FeesExpensesInvestment.twelve_b_one.value])
-                if len(twelve_b_one) > 0:
-                    my_ticker.twelve_b_one = float(fund_profile[FundProfile.fees_expenses_investment.value]
-                                                   [FeesExpensesInvestment.twelve_b_one.value][
-                                                       Format.formatted.value].replace(',', '').replace('%', ''))
-                is_too_young_data = is_too_young(
-                    default_key_statistics[DefaultKeyStatistics.fund_inception_date.value][Format.formatted.value])
-
-                if is_too_young_data[0]:
-                    settings.AddTimeBomb(symbol, is_too_young_data[1])
-                    failed_tickers_csv.write(my_ticker.toVerboseCSV() +
-                                             ["<10 years old. Will be 10 on " + is_too_young_data[1]])
-                    settings.log('%s is too young. Will be old enough on %s' % (symbol, is_too_young_data[1]))
-                    continue
-                if my_ticker.legal_type is None or 'Exchange Traded Fund' not in my_ticker.legal_type:
-                    my_ticker.rating = int(default_key_statistics[
-                                               DefaultKeyStatistics.morningstar_overall_rating.value][
-                                               Format.raw.value])
-                else:
-                    my_ticker.rating = api_caller.getMorningstarRating(my_ticker.symbol)
-                trailing_returns = fund_performance[FundPerformance.trailingReturns.value]
-                my_ticker.year_to_date = float(
-                    trailing_returns[TrailingReturns.year_to_date.value][Format.formatted.value].replace(',',
-                                                                                                         '').replace(
-                        '%', ''))
-                my_ticker.one_month = float(
-                    trailing_returns[TrailingReturns.one_month.value][Format.formatted.value].replace(',', '').replace(
-                        '%', ''))
-                my_ticker.one_year = float(
-                    trailing_returns[TrailingReturns.one_year.value][Format.formatted.value].replace(',', '').replace(
-                        '%', ''))
-                my_ticker.three_year = float(
-                    trailing_returns[TrailingReturns.three_year.value][Format.formatted.value].replace(',', '').replace(
-                        '%', ''))
-                my_ticker.five_year = float(
-                    trailing_returns[TrailingReturns.five_year.value][Format.formatted.value].replace(',', '').replace(
-                        '%', ''))
-                my_ticker.ten_year = float(
-                    trailing_returns[TrailingReturns.ten_year.value][Format.formatted.value].replace(',', '').replace(
-                        '%', ''))
-                my_ticker.negative_year = hasHadNegativeYear(
-                    fund_performance[FundPerformance.annual_total_returns.value]['returns'])
-                my_ticker.full_name = quote_type[QuoteType.long_name.value]
-                my_ticker.my_yield = float(
-                    summary_detail[SummaryDetail.my_yield.value][Format.formatted.value].replace(',', '').replace('%',
-                                                                                                                  ''))
-                if my_ticker.passes_filter()[0]:
+                results = Results(symbol_dict)
+                if summary.passesFilter(results):
                     settings.log('%s complete' % symbol)
-                    tickers_csv.write(my_ticker.toCSV())
+                    tickers_csv.write(results.toCSV() + summary.getFlags(results)[1])
                 else:
                     settings.log('Filtered %s' % symbol)
-                    failed_tickers_csv.write(my_ticker.toVerboseCSV() + [my_ticker.passes_filter()[1]])
+                    failed_tickers_csv.write(results.toCSV() + summary.getFlags(results)[1])
             except KeyError as exception:
                 settings.log('%s threw error %s!' % (symbol, str(exception)), log_types.error)
-                failed_tickers_csv.write(
-                    my_ticker.toVerboseCSV() + ['Threw exception during execution: ' + str(exception)])
+                failed_tickers_csv.write(results.toCSV() + summary.getFlags(results)[1])
         settings.current_stage = 'Done!'
     except settings.EndExecution:
         settings.log('Stopped')
@@ -373,6 +111,7 @@ def processSymbols():
     except Exception as exception:
         settings.log('Thread threw error: %s' % str(exception), log_types.error)
         settings.current_stage = 'Stopped! Exception Raised!'
+
 
 class MyScreen(Screen):
     def __init__(self, **kwargs):
@@ -386,6 +125,7 @@ class MyScreen(Screen):
 
     def exit(self):
         TickerTrackerApp.exit()
+
 
 class MenuScreen(MyScreen):
     def __init__(self, **kwargs):
@@ -457,6 +197,7 @@ class TrackerScreen(MyScreen):
             is_refresh_tickers = self.ids.is_refresh.active
             self.ids.is_overwrite.active = False
             self.ids.is_refresh.active = False
+            self.ids.back_button.disabled = True
             settings.pause_event.clear()
             settings.exit_event.clear()
             self.ids.start_button.text = 'Pause'
@@ -476,12 +217,213 @@ class TrackerScreen(MyScreen):
             self.first_start = True
             settings.current_stage = 'Stopped'
             self.ids.cancel_button.disabled = True
+            self.ids.back_button.disabled = False
             self.ids.start_button.text = 'Start'
+
+
+class LogicTree:
+    def __init__(self, node=None, depth=0):
+        self.node = node
+        self.children: list[LogicTree] = []
+        self.size = 0
+        self.depth = depth
+        if node is not None:
+            self.size = 1
+
+    def changeNode(self, item):
+        if self.node is None and item is not None:
+            self.size += 1
+        self.node = item
+        if self.node is None:
+            self.size -= 1
+
+    def add(self, parent, item):
+        if self.node in parent:
+            self.children.append(LogicTree(item, depth=self.depth + 1))
+            self.size += 1
+            return True
+        else:
+            result = False
+            for child in self.children:
+                result = result or child.add(parent, item)
+            if result:
+                self.size += 1
+            return result
+
+    def remove(self, item):
+        if self.node in item:
+            result = self.node
+            self.node = None
+            self.children = []
+            self.size = 0
+            return result
+        for child in self.children:
+            if child.node in item:
+                result = child.node
+                self.children.remove(child)
+                self.size -= 1
+                return result
+            result = child.remove(item)
+            if result is not None:
+                self.size -= 1
+            return result
+        return None
+
+    def get(self, name):
+        if self.node in name:
+            return self
+        else:
+            for child in self.children:
+                result = child.get(name)
+                if result is not None:
+                    return result
+        return None
+
+
+class FilterScreen(MyScreen):
+
+    def __init__(self, **kwargs):
+        super(FilterScreen, self).__init__(**kwargs)
+        self.selectedPanFilter = None
+        self.logic_tree = LogicTree()
+        self.logic_filters = []
+        self.current_id = 0
+        logics = [
+            'AND',
+            'OR',
+            'NOT',
+            'XOR',
+            '>',
+            '≥',
+            '<',
+            '≤',
+            '='
+        ]
+        logic_widgets = []
+        for logic in logics:
+            new_button = FilterButton(text=logic, on_release=self.addFilter)
+            logic_widgets.append(new_button)
+            self.ids[logic] = weakref.ref(new_button)
+        titles = Results({}).getCSVTitles(get_all=True)
+        data_widgets = []
+        for title in titles:
+            new_button = FilterButton(text=title, on_release=self.addFilter)
+            data_widgets.append(new_button)
+            self.ids[title] = weakref.ref(new_button)
+        custom_widgets = [
+            Spacer(),
+        ]
+        self.logic_layout = BoxLayout(orientation='vertical', size_hint_y=None)
+        self.logic_layout.bind(minimum_height=self.logic_layout.setter('height'))
+        for logic_widget in logic_widgets:
+            self.logic_layout.add_widget(Spacer())
+            self.logic_layout.add_widget(logic_widget)
+        self.data_layout = BoxLayout(orientation='vertical', size_hint_y=None)
+        self.data_layout.bind(minimum_height=self.data_layout.setter('height'))
+        for data_widget in data_widgets:
+            self.data_layout.add_widget(Spacer())
+            self.data_layout.add_widget(data_widget)
+        self.custom_layout = BoxLayout(orientation='vertical', size_hint_y=None)
+        self.custom_layout.bind(minimum_height=self.custom_layout.setter('height'))
+        for custom_widget in custom_widgets:
+            self.custom_layout.add_widget(Spacer())
+            self.custom_layout.add_widget(custom_widget)
+        self.changeFilter('Logic')
+
+    def changeFilter(self, new_filter):
+        if new_filter == 'Logic':
+            self.resetFilter()
+            self.resetWidgets()
+            self.ids.LogicButton.disabled = True
+            self.ids.filter_scroll.add_widget(self.logic_layout)
+        elif new_filter == 'Data':
+            self.resetFilter()
+            self.resetWidgets()
+            self.ids.DataButton.disabled = True
+            self.ids.filter_scroll.add_widget(self.data_layout)
+        elif new_filter == 'Custom':
+            self.resetFilter()
+            self.resetWidgets()
+            self.ids.CustomButton.disabled = True
+            self.ids.filter_scroll.add_widget(self.custom_layout)
+
+    def resetWidgets(self):
+        self.ids.filter_scroll.remove_widget(self.logic_layout)
+        self.ids.filter_scroll.remove_widget(self.data_layout)
+        self.ids.filter_scroll.remove_widget(self.custom_layout)
+
+    def resetFilter(self):
+        self.ids.LogicButton.disabled = False
+        self.ids.DataButton.disabled = False
+        self.ids.CustomButton.disabled = False
+
+    def addFilter(self, button: FilterButton):
+        self.current_id += 1
+        print(f'id:{self.current_id}')
+        filter_id = f'filter_{self.current_id}'
+        new_ids = {}
+        for ref in self.ids:
+            current_item = getattr(self.ids, ref)
+            if isinstance(current_item, FilterButton):
+                if ref == button.text:
+                    if self.logic_tree.size == 0:
+                        self.logic_tree.changeNode(filter_id)
+                        new_ids = new_ids | self.add_filter(filter_id, ref)
+                    else:
+                        if self.selectedPanFilter is not None:
+                            self.logic_tree.add(self.selectedPanFilter, filter_id)
+                            new_ids = new_ids | self.add_filter(filter_id, ref)
+
+        self.ids = self.ids | new_ids
+
+    def add_filter(self, filter_id, ref):
+        logic = self.logic_tree.get(filter_id)
+        if len(self.logic_filters) > logic.depth:
+            filter_widget = self.logic_filters[logic.depth]
+            node = LogicNode(filter_id, ref)
+            filter_widget.add_widget(node)
+            filter_widget.ids = filter_widget.ids | node.ids
+        else:
+            filter_widget = LogicFilter(filter_id, ref)
+            self.ids.filter_pan.add_widget(filter_widget)
+            self.logic_filters.append(filter_widget)
+        new_ids = {}
+        for ref2 in filter_widget.ids:
+            current_item = getattr(filter_widget.ids, ref2)
+            print(f'ref2{ref2}')
+            if '+' in current_item.id:
+                current_item.on_release = partial(self.selectPanFilter, current_item)
+            else:
+                current_item.on_release = partial(self.removeFilter, current_item)
+            new_ids[ref2] = weakref.ref(current_item)
+        return new_ids
+
+    def selectPanFilter(self, button: PanFilterButton):
+        for ref in self.ids:
+            current_item = getattr(self.ids, ref)
+            if isinstance(current_item, PanFilterButton):
+                if ref == button.id:
+                    if self.selectedPanFilter == button.id:
+                        current_item.background_color = [1, 1, 1, 1]
+                        self.selectedPanFilter = None
+                    else:
+                        current_item.background_color = [.1, .1, .1, 1]
+                        self.selectedPanFilter = button.id
+                else:
+                    current_item.background_color = [1, 1, 1, 1]
+
+    def removeFilter(self, button: PanFilterButton):
+        if self.selectedPanFilter == button.id:
+            self.selectedPanFilter = None
+        self.logic_filters[self.logic_tree.get(button.id).depth].remove_widget(button.parent_view)
+        self.logic_tree.remove(button.id)
+        print(self.logic_tree.size)
 
 
 Builder.load_file('pages/styles.kv')
 Builder.load_file('pages/menu.kv')
 Builder.load_file('pages/tracker.kv')
+Builder.load_file('pages/filter.kv')
 
 
 class TickerTracker(App):
@@ -495,6 +437,7 @@ class TickerTracker(App):
         self.icon = r'Data\Images\icon.png'
         self.root.add_widget(MenuScreen(name='Menu'))
         self.root.add_widget(TrackerScreen(name='Tracker'))
+        self.root.add_widget(FilterScreen(name='Filter'))
 
         return self.root
 
@@ -511,9 +454,9 @@ class TickerTracker(App):
     def _goToScreen(self, screen_name: str):
         self.root.current = screen_name
 
-
     def exit(self):
         self.stop()
+
 
 TickerTrackerApp = None
 

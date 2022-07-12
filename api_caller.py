@@ -80,58 +80,32 @@ def checkIfCallMS() -> bool:
 
 
 # region 'Screens'
-def screen(offset: int, size: int, screen_type: ScreenTypes, payload='') -> json:
+def screen(offset: int, size: int, screen_type: ScreenTypes, payload) -> json:
     url = "https://yh-finance.p.rapidapi.com/screeners/list"
-    screener_payload = '''
-        [
-            {
-                "operator":"EQ",
-                "operands": [
-                    "region",
-                    "us"
-                ]
-            }
-            %s
-        ]
-        ''' % payload
-    querystring = {"quoteType": screen_type.value, "sortField": "fundnetassets", "region": "US",
+    screener_payload = payload
+    print(screener_payload)
+    querystring = {"quoteType": screen_type.value, "sortField": "fundnetassets",
                    "offset": str(offset), "sortType": "DESC", "size": str(size)}
-    response = requests.request("POST", url, data=screener_payload, headers=YH_HEADERS, params=querystring)
+    response = requests.request("POST", url, json=screener_payload, headers=YH_HEADERS, params=querystring)
     print(YH_HEADERS)
     print(response)
     if '401' in str(response) or '403' in str(response):
         raise Exception('Incorrect API Key! Stopping!')
+    print("\n\ndebug")
+    print(response.text)
+    print("debug\n\n")
     return json.loads(response.text)
 
 
 def screenBetweenFundPrices(
         offset: int, size: int, screen_type: ScreenTypes, price_low: float, price_high: float) -> json:
-    screener_payload = '''
-            ,
-            {
-                "operator":"btwn",
-                "operands": [
-                    "intradayprice",
-                    %.4f,
-                    %.4f
-                ]
-            }
-        ''' % (price_low, price_high)
+    screener_payload = [{"operator": "btwn", "operands": ["intradayprice", price_low, price_high]}]
     return doAPICall(YHFunctions.screen, offset, size, screen_type, screener_payload)
 
 
 def screenGreaterThanFundPrices(offset: int, size: int, screen_type: ScreenTypes, greater_than: float,
                                 dont_care=0) -> json:
-    screener_payload = '''
-            ,
-            {
-                "operator":"GT",
-                "operands": [
-                    "intradayprice",
-                    %.4f
-                ]
-            }
-        ''' % greater_than
+    screener_payload = [{"operator": "gt", "operands": ["intradayprice", greater_than]}]
     return doAPICall(YHFunctions.screen, offset, size, screen_type, screener_payload)
 
 

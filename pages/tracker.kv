@@ -12,6 +12,7 @@
             row_force_default: True
             row_default_height: 50
             MyButton:
+                id: back_button
                 text: 'Back'
                 size_hint: None, 1
                 width: 100
@@ -26,7 +27,9 @@
                         rectangle: self.x, self.y, self.width, self.height
                 background_color: .1, .1, .1, 1
                 on_release: root.goBack()
-            FloatLayout:
+            GridLayout:
+                rows: 1
+                cols: 1
                 height: 50
                 canvas.before:
                     Color:
