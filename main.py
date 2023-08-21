@@ -1,38 +1,48 @@
+from pydantic import ValidationError
 import requests
 import csv
-headers = {}
-params = {'e': 'USMF'}
-tracked_funds = set()
-with requests.get('https://apps.csidata.com/factsheets.php?type=stock&format=csv&exchangeid=MUTUAL', stream=True) as response:
-    reader = csv.reader(response.iter_lines(decode_unicode=True))
-    for content in reader:
-        if len(content) > 1:
-            tracked_funds.add(content[1])
-with requests.get('https://apps.csidata.com/factsheets.php?type=stock&format=csv&isetf=1', stream=True) as response:
-    reader = csv.reader(response.iter_lines(decode_unicode=True))
-    for content in reader:
-        if len(content) > 1:
-            tracked_funds.add(content[1])
-# response = requests.get('https://apps.csidata.com/factsheets.php?type=stock&format=csv&exchangeid=MUTUAL')
-# response = requests.get('https://apps.csidata.com/factsheets.php?type=stock&format=csv&isetf=1')
-# print(response)
-# print(response.content)
-# exit(-1)
-# response = requests.get('http://ftp.nasdaqtrader.com/dynamic/SymDir/nasdaqtraded.txt')
-# reader = csv.reader(response.iter_lines(decode_unicode=True), delimiter='|')
-# tracked_funds = set()
-# for line in reader:
-#     if len(line) == 0:
-#         continue
-#     tracked_funds.add(line[1])
-with open('./funds.csv') as funds_csv:
-    funds = funds_csv.read().split('\n')
-    i = 0
-    for line in funds:
-        line = line.rstrip()
-        if line not in tracked_funds:
-            i+=1
-            print(line)
-    print(i)
 
-            # NYSE Arca
+from database.database_models import create_db_and_tables, put_from_csi
+
+from request.models import CSIData
+
+import yfinance as yf
+
+def decode_csi_data(data:list) -> CSIData:
+    return CSIData(
+        symbol=data[1],
+        long_name=data[2],
+        exchange=data[3],
+        is_active=data[4],
+        start_date=data[5],
+        end_date=data[6]
+            )
+
+def read_csi_data(url:str):
+    decoded_csi_data:list[CSIData] = []
+    header = True
+    with requests.get(url, stream=True) as response:
+        reader = csv.reader(response.iter_lines(decode_unicode=True))
+        for content in reader:
+            if header:
+                header = False
+                continue
+            if len(content) > 1 and content[4] == '1':
+                try:
+                    decoded_csi_data.append(decode_csi_data(content))
+                except ValidationError as e:
+                    print(repr(e)) # TODO log this.
+    put_from_csi(decoded_csi_data) 
+
+def acquire_symbols():
+    read_csi_data('https://apps.csidata.com/factsheets.php?type=stock&format=csv&exchangeid=MUTUAL')
+    read_csi_data('https://apps.csidata.com/factsheets.php?type=stock&format=csv&isetf=1')
+
+
+
+if __name__ == "__main__":
+    # create_db_and_tables()
+    # acquire_symbols()
+    data = yf.Ticker('SPY')
+    #print(data.info)
+    print(data)
