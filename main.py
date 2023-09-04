@@ -1,48 +1,33 @@
-from pydantic import ValidationError
-import requests
-import csv
+import os
+import pathlib
+from dotenv import load_dotenv
+import request
+import logging
+import logging.handlers
 
-from database.database_models import create_db_and_tables, put_from_csi
+def main():
+    load_dotenv()
+    pathlib.Path('logs').mkdir(exist_ok=True)
 
-from request.models import CSIData
+    # region Initialize Logging
+    logging.basicConfig(
+        filename='logs/log.log',
+        filemode='a',
+        encoding='utf-8',
+        level=os.getenv('LOGGING_LEVEL'),
+        format='%(asctime)s:%(threadName)s:%(levelname)s:%(name)s:%(funcName)s:%(lineno)d:\t%(message)s',
+        )
+    root_logger = logging.getLogger()
+    handler = logging.handlers.RotatingFileHandler('logs/log.log', maxBytes=1024*1024, backupCount=50, encoding='utf-8')
+    handler.setFormatter(fmt=logging.Formatter('%(asctime)s:%(threadName)s:%(levelname)s:%(name)s:%(funcName)s:%(lineno)d:\t%(message)s'))
+    root_logger.addHandler(handler)
+    root_logger.info('Started')
+    # endregion
 
-import yfinance as yf
-
-def decode_csi_data(data:list) -> CSIData:
-    return CSIData(
-        symbol=data[1],
-        long_name=data[2],
-        exchange=data[3],
-        is_active=data[4],
-        start_date=data[5],
-        end_date=data[6]
-            )
-
-def read_csi_data(url:str):
-    decoded_csi_data:list[CSIData] = []
-    header = True
-    with requests.get(url, stream=True) as response:
-        reader = csv.reader(response.iter_lines(decode_unicode=True))
-        for content in reader:
-            if header:
-                header = False
-                continue
-            if len(content) > 1 and content[4] == '1':
-                try:
-                    decoded_csi_data.append(decode_csi_data(content))
-                except ValidationError as e:
-                    print(repr(e)) # TODO log this.
-    put_from_csi(decoded_csi_data) 
-
-def acquire_symbols():
-    read_csi_data('https://apps.csidata.com/factsheets.php?type=stock&format=csv&exchangeid=MUTUAL')
-    read_csi_data('https://apps.csidata.com/factsheets.php?type=stock&format=csv&isetf=1')
-
-
+    # TODO Add Logic for backing up the database before each run
+    # TODO looks like we are going to need to use selenium :(
+    request.test()
+    root_logger.info('Finished')
 
 if __name__ == "__main__":
-    # create_db_and_tables()
-    # acquire_symbols()
-    data = yf.Ticker('SPY')
-    #print(data.info)
-    print(data)
+    main()
