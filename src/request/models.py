@@ -1,5 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel, Field, validator
+from database.database_models import DataFetchStage
 
 from utils.date_utils import convert_str_to_epoch_seconds
 
@@ -10,6 +11,7 @@ class CSIData(BaseModel):
     is_active: int
     start_date: int
     end_date: int
+    sub_exchange: str
 
     @validator('start_date', 'end_date', pre=True)
     def convert_date_to_int(cls, v: str):
@@ -21,6 +23,12 @@ class CSIData(BaseModel):
         if v not in valid_exchanges:
             raise ValueError('Invalid Exchange')
         return v
+    
+    @validator('sub_exchange')
+    def validate_sub_exchange(cls, v: str):
+        if 'OTC' in v or 'grey' in v:
+            raise ValueError('Invalid SubExchange')
+        return v
 
 class EODETF(BaseModel):
     category: str = Field(..., alias='General::Category')
@@ -31,9 +39,39 @@ class EODETF(BaseModel):
     return_3y: float = Field(..., alias='ETF_Data::Performance::Returns_3Y')
     return_5y: float = Field(..., alias='ETF_Data::Performance::Returns_5Y')
     return_10y: float = Field(..., alias='ETF_Data::Performance::Returns_10Y')
+    data_fetch_stage:DataFetchStage = DataFetchStage.MS
 
 class EODFUND(BaseModel):
     category: str = Field(..., alias='General::Fund_Category')
     yield_data: int = Field(..., alias='MutualFund_Data::Yield')
-    morningstar_rating: Optional[int] = Field(..., alias='MutualFund_Data::Morning_Star_Rating')
+    data_fetch_stage:DataFetchStage = DataFetchStage.MS
+    #morningstar_rating: Optional[int] = Field(..., alias='MutualFund_Data::Morning_Star_Rating')
 # General::Fund_Category,MutualFund_Data::Morning_Star_Rating,MutualFund_Data::Yield
+
+class MS(BaseModel):
+    morningstar_rating: Optional[int]
+    return_ytd: float
+    return_1m: float
+    return_1y: float
+    return_3y: float
+    return_5y: float
+    return_10y: float
+    return_15y: float
+    has_had_negative_return: bool
+    yield_data: float
+    category: str
+    fee: Optional[float]
+    data_fetch_stage:DataFetchStage = DataFetchStage.FINISHED
+
+
+class MSTrailingReturns(BaseModel):
+    return_1d: float
+    return_1w: float
+    return_1m: float
+    return_3m: float
+    return_ytd: float
+    return_1y: float
+    return_3y: float
+    return_5y: float
+    return_10y: float
+    return_15y: float
