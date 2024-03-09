@@ -1,0 +1,17 @@
+{
+  "count": 1,
+  "pages": 1,
+  "results": [
+    {
+      "id": "us_security-0P0001ISES",
+      "name": "PIMCO Total Return ESG A",
+      "description": null,
+      "exchange": "XNAS",
+      "performanceId": "0P0001ISES",
+      "securityType": "FO",
+      "ticker": "PTGAX",
+      "type": "us_security",
+      "url": null
+    }
+  ]
+}
