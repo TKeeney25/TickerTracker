@@ -11,13 +11,44 @@ This code will follow a basic ETL pipeline.
     * If data is malformed an exception will be raised that will backpropagate to the extractor.
 4. Data is then loaded into the database.
 
-## Data Flow
+## Optimal Data Flow
 
-The flow is as follows:
-
+### Shared Steps
 1. All tickers along with ticker fundamentals are loaded from CSI.
-2. Ticker performanceIds are acquired.
-3. Ticker securityIds are acquired.
+
+### TickerTracker
+
+Client Required Data
+* symbol
+* long_name
+* category
+* ytd_return
+* 1_month_return
+* 1_year_return
+* 3_year_return
+* 5_year_return
+* 10_year_return
+* yield(ttm)
+* number_of_negative_years_within_past_ten
+* 12b-1 fee
+* morningstar_rating
+
+2. Something
+
+### FundFinder
+
+Client Required Data
+* symbol
+* ytd_return
+* 1_year_return
+* 3_year_return
+* 5_year_return
+* 10_year_return
+* 15_year_return
+* since_inception_return
+* morningstar_rating
+
+2. Something
 
 ## Data Requirements
 
