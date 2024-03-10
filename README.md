@@ -1,4 +1,4 @@
-# TickerTracker
+# Documentation
 
 ## Code Structure
 
@@ -10,68 +10,60 @@ This code will follow a basic ETL pipeline.
 3. Extracted data is transformed.
     * If data is malformed an exception will be raised that will backpropagate to the extractor.
 4. Data is then loaded into the database.
-
-## Optimal Data Flow
-
-### Shared Steps
-1. All tickers along with ticker fundamentals are loaded from CSI.
-
-### TickerTracker
-
-Client Required Data
-* symbol
-* long_name
-* category
-* ytd_return
-* 1_month_return
-* 1_year_return
-* 3_year_return
-* 5_year_return
-* 10_year_return
-* yield(ttm)
-* number_of_negative_years_within_past_ten
-* 12b-1 fee
-* morningstar_rating
-
-2. Something
-
-### FundFinder
-
-Client Required Data
-* symbol
-* ytd_return
-* 1_year_return
-* 3_year_return
-* 5_year_return
-* 10_year_return
-* 15_year_return
-* since_inception_return
-* morningstar_rating
-
-2. Something
+    * If data indicates that the fund is bad, then a flag will be raised. This flag is ignored in **FundFinder**.
 
 ## Data Requirements
 
-| Data Name | Acquisition Location | Required By |
-| -------- | ------- | ---- |
-| symbol | CSI | Client |
-| long_name | CSI | Client |
-| exchange | CSI | Code |
-| is_active | CSI | Code |
-| start_date | CSI | Code |
-| end_date | CSI | Code |
-| sub_exchange | CSI | Code |
-| percent_yield | Get-Quote | Client |
-| return_ytd | Trailing | Client |
-| return_1m | Trailing | Client |
-| return_1y | Trailing | Client |
-| return_3y | Trailing | Client |
-| return_5y | Trailing | Client |
-| return_10y | Trailing | Client |
-| return_15y | Trailing | Client 2 |
-| category | Trailing | Client |
-| fee | Other-Fees | Client |
-| number_negative_returns | Get-Returns | Client |
-| morningstar_rating | Trailing | Client |
-| performance_id | Auto-Complete | Get-Returns |
-| security_id | Get-Returns | Trailing, Get-Quote, Other-Fees, Get-Returns |
+| Data Name               | Acquisition Location  | Required By                                  |
+| ----------------------- | --------------------- | -------------------------------------------- |
+| symbol                  | CSI                   | FundFinder, TickerTracker                    |
+| long_name               | CSI                   | FundFinder, TickerTracker                    |
+| exchange                | CSI                   | Code                                         |
+| is_active               | CSI                   | Code                                         |
+| start_date              | CSI                   | Code                                         |
+| end_date                | CSI                   | Code                                         |
+| sub_exchange            | CSI                   | Code                                         |
+| percent_yield           | Get-Quote             | TickerTracker                                |
+| return_ytd              | Trailing              | FundFinder, TickerTracker                    |
+| return_1m               | Trailing              | FundFinder, TickerTracker                    |
+| return_1y               | Trailing              | FundFinder, TickerTracker                    |
+| return_3y               | Trailing              | FundFinder, TickerTracker                    |
+| return_5y               | Trailing              | FundFinder, TickerTracker                    |
+| return_10y              | Trailing              | FundFinder, TickerTracker                    |
+| return_15y              | Trailing              | FundFinder                                   |
+| return_since_inception  | Trailing              | FundFinder                                   |
+| category                | Get-Returns, Trailing | TickerTracker                                |
+| fee                     | Other-Fees            | TickerTracker                                |
+| number_negative_returns | Get-Returns           | TickerTracker                                |
+| morningstar_rating      | Trailing              | FundFinder, TickerTracker                    |
+| performance_id          | Auto-Complete         | Get-Security-ID                              |
+| security_id             | Get-Security-ID       | Trailing, Get-Quote, Other-Fees, Get-Returns |
+
+## Optimal Data Flow
+
+### TickerTracker
+
+1. CSI
+2. Auto-Complete
+3. Get-Security-ID
+4. Trailing
+5. Other-Fees
+6. Get-Quote
+7. Get-Returns
+
+### FundFinder
+
+1. CSI
+2. Auto-Complete
+3. Get-Security-ID
+4. Trailing
+
+## Notable Functions
+
+### CSI
+
+* Will be ran every time the program is ran. Running it takes very little time.
+
+### Auto-Complete & Get-Security-ID
+
+* Will only be ran for new funds or funds
