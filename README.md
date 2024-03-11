@@ -23,18 +23,19 @@ This code will follow a basic ETL pipeline.
 | start_date              | CSI                   | Code                                         |
 | end_date                | CSI                   | Code                                         |
 | sub_exchange            | CSI                   | Code                                         |
-| percent_yield           | Get-Quote             | TickerTracker                                |
-| return_ytd              | Trailing              | FundFinder, TickerTracker                    |
-| return_1m               | Trailing              | FundFinder, TickerTracker                    |
-| return_1y               | Trailing              | FundFinder, TickerTracker                    |
-| return_3y               | Trailing              | FundFinder, TickerTracker                    |
-| return_5y               | Trailing              | FundFinder, TickerTracker                    |
-| return_10y              | Trailing              | FundFinder, TickerTracker                    |
+| brokerages              | YH-Get-Summary        | TickerTracker                                |
+| percent_yield           | YH-Get-Summary, Get-Quote             | TickerTracker                                |
+| return_ytd              | YH-Get-Summary, Trailing              | FundFinder, TickerTracker                    |
+| return_1m               | YH-Get-Summary, Trailing              | FundFinder, TickerTracker                    |
+| return_1y               | YH-Get-Summary, Trailing              | FundFinder, TickerTracker                    |
+| return_3y               | YH-Get-Summary, Trailing              | FundFinder, TickerTracker                    |
+| return_5y               | YH-Get-Summary, Trailing              | FundFinder, TickerTracker                    |
+| return_10y              | YH-Get-Summary, Trailing              | FundFinder, TickerTracker                    |
 | return_15y              | Trailing              | FundFinder                                   |
-| return_since_inception  | Trailing              | FundFinder                                   |
+| return_since_inception  | YH-Get-Summary, Trailing              | FundFinder                                   |
 | category                | Get-Returns, Trailing | TickerTracker                                |
-| fee                     | Other-Fees            | TickerTracker                                |
-| number_negative_returns | Get-Returns           | TickerTracker                                |
+| fee                     | YH-Get-Summary, Other-Fees            | TickerTracker                                |
+| number_negative_returns | YH-Get-Summary, Get-Returns           | TickerTracker                                |
 | morningstar_rating      | Trailing              | FundFinder, TickerTracker                    |
 | performance_id          | Auto-Complete         | Get-Security-ID                              |
 | security_id             | Get-Security-ID       | Trailing, Get-Quote, Other-Fees, Get-Returns |
