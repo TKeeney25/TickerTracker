@@ -48,9 +48,7 @@ This code will follow a basic ETL pipeline.
 2. Auto-Complete
 3. Get-Security-ID
 4. Trailing
-5. Other-Fees
-6. Get-Quote
-7. Get-Returns
+5. YH-Get-Summary
 
 ### FundFinder
 
